@@ -30,6 +30,7 @@ void terminal_initialize(void)
 			terminal_buffer[index] = vga_entry(' ', terminal_color);
 		}
 	}
+	terminal_showlogo();
 }
 
 void terminal_setcolor(uint8_t color)
@@ -100,4 +101,17 @@ void terminal_write(const char *data, size_t size)
 void terminal_writestring(const char *data)
 {
 	terminal_write(data, strlen(data));
+}
+
+void terminal_showlogo(void)
+{
+	terminal_writestring("MP\"\"\"\"\"\"`MMdP      oo                          \n");
+	terminal_writestring("M  mmmmm..M88                                        \n");
+	terminal_writestring("M.      `YM88d888b.dP.d8888b.dP    dP88d888b..d8888b.\n");
+	terminal_writestring("MMMMMMM.  M88'  `888888'  `8888    8888'  `8888ooood8\n");
+	terminal_writestring("M. .MMM'  M88    888888.  .8888.  .8888      88.  ...\n");
+	terminal_writestring("Mb.     .dMdP    dPdP`8888P88`88888P'dP      `88888P'\n");
+	terminal_writestring("MMMMMMMMMMM               .88                        \n");
+	terminal_writestring("                      d8888P                         \n");
+	terminal_writestring("Welcome to Shigure OS!\n");
 }
