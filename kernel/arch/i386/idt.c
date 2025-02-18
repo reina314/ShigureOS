@@ -49,6 +49,5 @@ void idt_install()
 
     // You can add new ISRs to the IDT here
     //
-    isr_install();
     idt_load();
 }
