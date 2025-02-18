@@ -2,8 +2,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// Entry format in GDT
-struct gdt_entry {
+/// @brief Entry format in GDT
+struct gdt_entry
+{
     unsigned short limit_low;
     unsigned short base_low;
     unsigned char base_middle;
@@ -13,7 +14,8 @@ struct gdt_entry {
 } __attribute__((packed));
 // packed for avoiding compiler's optimization
 
-struct gdt_ptr {
+struct gdt_ptr
+{
     unsigned short limit;
     unsigned int base;
 } __attribute__((packed));
@@ -21,14 +23,15 @@ struct gdt_ptr {
 struct gdt_entry gdt[3];
 struct gdt_ptr gdtp;
 
-// Reload new segment registers; defined in boot.S
+/// @brief Reload new segment registers; defined in gdt.S
 extern void gdt_flush();
 
-void gdt_encode_entry(int index, unsigned long base, unsigned long limit, unsigned char access, unsigned char granularity) {
+void gdt_set_descriptor(int index, unsigned long base, unsigned long limit, unsigned char access, unsigned char granularity)
+{
     gdt[index].base_low = (base & 0xFFFF);
     gdt[index].base_middle = (base >> 16) & 0xFF;
     gdt[index].base_high = (base >> 24) & 0xFF;
-    
+
     gdt[index].limit_low = (limit & 0xFFFF);
     gdt[index].granularity = ((limit >> 16) & 0x0F);
 
@@ -36,17 +39,19 @@ void gdt_encode_entry(int index, unsigned long base, unsigned long limit, unsign
     gdt[index].access = access;
 }
 
-// To be called from kernel main
-void gdt_install(void) {
+/// @brief To be called from kernel main
+/// @param
+void gdt_install(void)
+{
     gdtp.limit = (sizeof(struct gdt_entry) * 3) - 1;
-    gdtp.base = (uint32_t) &gdt;
+    gdtp.base = (uint32_t)&gdt;
 
     // Null descriptor
-    gdt_encode_entry(0, 0, 0, 0, 0);
+    gdt_set_descriptor(0, 0, 0, 0, 0);
     // Code sengment
-    gdt_encode_entry(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);
+    gdt_set_descriptor(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);
     // Data segment
-    gdt_encode_entry(2, 0, 0xFFFFFFFF, 0x92, 0xCF);
+    gdt_set_descriptor(2, 0, 0xFFFFFFFF, 0x92, 0xCF);
 
     gdt_flush();
 }
