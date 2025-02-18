@@ -1,5 +1,4 @@
 #include <kernel/idt.h>
-#include <kernel/isr.h>
 #include <string.h>
 #include <stdint.h>
 
@@ -49,6 +48,5 @@ void idt_install()
 
     // You can add new ISRs to the IDT here
     //
-    isr_install();
     idt_load();
 }

@@ -1,11 +1,22 @@
 # ShigureOS
+```
+MP""""""`MMdP      oo                          
+M  mmmmm..M88                                        
+M.      `YM88d888b.dP.d8888b.dP    dP88d888b..d8888b.
+MMMMMMM.  M88'  `888888'  `8888    8888'  `8888ooood8
+M. .MMM'  M88    888888.  .8888.  .8888      88.  ...
+Mb.     .dMdP    dPdP`8888P88`88888P'dP      `88888P'
+MMMMMMMMMMM               .88                        
+                      d8888P                         
+```
+
 ShigureOS is a Unix-like operating system that boasts its simplicity and high maintainability.<br>
 This is my first personal OSDev project that is largely based on https://wiki.osdev.org/Meaty_Skeleton and its descendant https://github.com/itravers/PanicOS.<br>
 It is currently developed for x86 systems (specifically i686-elf target), but in the future it might be translated to other architectures as well.
 
 ## Features
-- GDT
-- IDT (with ISR capability)
+- GDT & IDT 
+- ISR & IRQ
 
 ## Booting with QEMU
 - To clean the development environment, you need to run the following command in the root project directory.
