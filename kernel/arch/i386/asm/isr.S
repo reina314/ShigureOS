@@ -4,8 +4,10 @@
 .global isr_stub\num
 .type isr_stub\num, @function
 isr_stub\num:
-    call exception_handler
-    iret
+    cli
+    pushl $0
+    pushl $\num
+    jmp isr_common_stub
 .endm
 
 .macro ISR_ERR num
