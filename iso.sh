@@ -8,7 +8,7 @@ mkdir -p isodir/boot/grub
 
 cp sysroot/boot/shigure.kernel isodir/boot/shigure.kernel
 cat > isodir/boot/grub/grub.cfg << EOF
-menuentry "ShigureOS (0.0.0)" {
+menuentry "ShigureOS (dev)" {
 	multiboot /boot/shigure.kernel
 }
 EOF
