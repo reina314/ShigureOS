@@ -19,7 +19,7 @@ struct gdt_ptr {
 } __attribute__((packed));
 
 struct gdt_entry gdt[3];
-struct gdt_ptr gptr;
+struct gdt_ptr gdtp;
 
 // Reload new segment registers; defined in boot.S
 extern void gdt_flush();
@@ -38,8 +38,8 @@ void gdt_encode_entry(int index, unsigned long base, unsigned long limit, unsign
 
 // To be called from kernel main
 void gdt_install(void) {
-    gptr.limit = (sizeof(struct gdt_entry) * 3) - 1;
-    gptr.base = (uint32_t) &gdt;
+    gdtp.limit = (sizeof(struct gdt_entry) * 3) - 1;
+    gdtp.base = (uint32_t) &gdt;
 
     // Null descriptor
     gdt_encode_entry(0, 0, 0, 0, 0);

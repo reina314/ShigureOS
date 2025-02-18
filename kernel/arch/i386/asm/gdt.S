@@ -1,10 +1,10 @@
 # Initialize and reload GDT
 .section .text
 .global gdt_flush
-.extern gptr
+.extern gdtp
 .type gdt_flush, @function
 gdt_flush:
-	lgdt gptr
+	lgdt gdtp
 
 	mov $0x10, %ax
 	mov %ax, %ds
