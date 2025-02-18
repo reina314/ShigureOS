@@ -7,7 +7,7 @@ struct gdt_entry {
     unsigned short limit_low;
     unsigned short base_low;
     unsigned char base_middle;
-    unsigned char flag;
+    unsigned char access;
     unsigned char granularity;
     unsigned char base_high;
 } __attribute__((packed));
@@ -24,7 +24,7 @@ struct gdt_ptr gptr;
 // Reload new segment registers; defined in boot.S
 extern void gdt_flush();
 
-void gdt_encode_entry(int index, unsigned long base, unsigned long limit, unsigned char flag, unsigned char granularity) {
+void gdt_encode_entry(int index, unsigned long base, unsigned long limit, unsigned char access, unsigned char granularity) {
     gdt[index].base_low = (base & 0xFFFF);
     gdt[index].base_middle = (base >> 16) & 0xFF;
     gdt[index].base_high = (base >> 24) & 0xFF;
@@ -33,7 +33,7 @@ void gdt_encode_entry(int index, unsigned long base, unsigned long limit, unsign
     gdt[index].granularity = ((limit >> 16) & 0x0F);
 
     gdt[index].granularity |= (granularity & 0xF0);
-    gdt[index].flag = flag;
+    gdt[index].access = access;
 }
 
 // To be called from kernel main
@@ -48,8 +48,5 @@ void gdt_install(void) {
     // Data segment
     gdt_encode_entry(2, 0, 0xFFFFFFFF, 0x92, 0xCF);
 
-    printf("Flushing old GDT cache...\n");
     gdt_flush();
-
-    printf("New GDT has been enabled.\n");
 }
