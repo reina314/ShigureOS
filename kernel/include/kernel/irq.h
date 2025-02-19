@@ -5,6 +5,6 @@
 
 void irq_install(void);
 typedef void (*irqhandler)(struct regs *r);
-void register_request_handler(int index, irqhandler callback);
+void register_request_handler(int vector, irqhandler callback);
 
 #endif
