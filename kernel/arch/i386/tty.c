@@ -16,6 +16,8 @@ static size_t terminal_y;
 static uint8_t terminal_color;
 static uint16_t *terminal_buffer;
 
+/// @brief To be called in kernel main
+/// @param
 void terminal_initialize(void)
 {
 	terminal_x = 0;
@@ -38,12 +40,19 @@ void terminal_setcolor(uint8_t color)
 	terminal_color = color;
 }
 
+/// @brief Display given character on terminal at specified position
+/// @param c
+/// @param color
+/// @param x
+/// @param y
 void terminal_putentryat(unsigned char c, uint8_t color, size_t x, size_t y)
 {
 	const size_t index = y * VGA_WIDTH + x;
 	terminal_buffer[index] = vga_entry(c, color);
 }
 
+/// @brief Clear the last line of the terminal
+/// @param
 void terminal_delete_last_line(void)
 {
 	int index;
@@ -52,6 +61,8 @@ void terminal_delete_last_line(void)
 		terminal_buffer[index] = vga_entry(' ', terminal_color);
 }
 
+/// @brief Scroll the specified line up by a line
+/// @param line
 void terminal_scroll(int line)
 {
 	int index;
@@ -60,6 +71,8 @@ void terminal_scroll(int line)
 		terminal_buffer[index - VGA_WIDTH] = terminal_buffer[index];
 }
 
+/// @brief Display given character on terminal
+/// @param c
 void terminal_putchar(char c)
 {
 	unsigned char uc = c;
@@ -87,17 +100,23 @@ void terminal_putchar(char c)
 	{
 		for (int y = 1; y < VGA_HEIGHT; y++)
 			terminal_scroll(y);
+		terminal_delete_last_line();
 		terminal_x = 0;
 		terminal_y = VGA_HEIGHT - 1;
 	}
 }
 
+/// @brief Display given string on terminal
+/// @param data
+/// @param size
 void terminal_write(const char *data, size_t size)
 {
 	for (size_t i = 0; i < size; i++)
 		terminal_putchar(data[i]);
 }
 
+/// @brief Wrapper for terminal_write
+/// @param data
 void terminal_writestring(const char *data)
 {
 	terminal_write(data, strlen(data));
