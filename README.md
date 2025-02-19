@@ -17,6 +17,8 @@ It is currently developed for x86 systems (specifically i686-elf target), but in
 ## Features
 - GDT & IDT 
 - ISR & IRQ
+- Keyboard driver
+- Serial driver
 
 ## Booting with QEMU
 - To clean the development environment, you need to run the following command in the root project directory.
