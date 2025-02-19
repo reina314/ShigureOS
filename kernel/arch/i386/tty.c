@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <kernel/tty.h>
+#include <kernel/serial.h>
 
 #include "vga.h"
 
@@ -89,6 +90,7 @@ void terminal_putchar(char c)
 		terminal_x++;
 		break;
 	}
+	serial_write(SERIAL_COM1_BASE, c);
 
 	if (terminal_x == VGA_WIDTH)
 	{
