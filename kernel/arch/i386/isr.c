@@ -53,11 +53,11 @@ char *exception_messages[] = {
     "Reserved"};
 
 /// @brief
-/// @param index
+/// @param vector
 /// @param handler
-void register_interrupt_handler(int index, handler handler)
+void register_interrupt_handler(int vector, handler handler)
 {
-    interrupt_handlers[index] = handler;
+    interrupt_handlers[vector] = handler;
 }
 
 /// @brief Currently all ISRs point to this function and just halt the system

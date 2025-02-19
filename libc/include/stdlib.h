@@ -12,6 +12,7 @@ extern "C"
     __attribute__((__noreturn__)) void abort(void);
 
     void outb(uint16_t port, uint8_t value); // defined in io.c
+    uint8_t inb(uint16_t port);              // defined in io.c
 
 #ifdef __cplusplus
 }

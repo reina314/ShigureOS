@@ -52,6 +52,7 @@ int printf(const char *restrict format, ...)
 	va_list parameters;
 	va_start(parameters, format);
 
+	int i;
 	int written = 0;
 	size_t len;
 
@@ -82,9 +83,9 @@ int printf(const char *restrict format, ...)
 
 		switch (*format)
 		{
-		case ('d'):
+		case ('d'): // for signed integers
 			format++;
-			int i = (int)va_arg(parameters, int);
+			i = (int)va_arg(parameters, int);
 			len = printint(i, 10, 1);
 			if (maxrem < len)
 			{
@@ -94,7 +95,24 @@ int printf(const char *restrict format, ...)
 			written += len;
 			break;
 
-		case ('c'):
+		case ('x'): // for hexadecimal integers
+			format++;
+			i = (int)va_arg(parameters, int);
+			len = 2;
+			if (!print("0x", len))
+			{
+				return -1;
+			}
+			len += printint(i, 16, 1);
+			if (maxrem < len)
+			{
+				// TODO: Set errno to EOVERFLOW.
+				return -1;
+			}
+			written += len;
+			break;
+
+		case ('c'): // for characters
 			format++;
 			char c = (char)va_arg(parameters, int /* char promotes to int */);
 			if (!maxrem)
@@ -107,7 +125,7 @@ int printf(const char *restrict format, ...)
 			written++;
 			break;
 
-		case ('s'):
+		case ('s'): // for strings
 			format++;
 			const char *str = va_arg(parameters, const char *);
 			len = strlen(str);
