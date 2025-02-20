@@ -25,6 +25,17 @@ stack_top:
 .type _start, @function
 _start:
 	movl $stack_top, %esp
+	
+	# Reset EFLAGS
+	pushl $0
+	popf
+
+	# Push the value of stack pointer
+	pushl %esp
+	# Push the magic value
+	pushl %eax
+	# Push the pointer to the multiboot info struct
+	pushl %ebx
 
 	# Call the global constructors.
 	call _init
