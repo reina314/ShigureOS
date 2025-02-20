@@ -18,7 +18,6 @@ extern void *irq_stub_table[];
 /// @param handler
 void register_request_handler(int vector, irqhandler handler)
 {
-    printf("Registering handler for IRQ %d\n", vector);
     irq_routines[vector] = handler;
 }
 
@@ -31,7 +30,6 @@ void unregister_request_handler(int vector)
 /// @param
 void irq_remap(void)
 {
-    printf("Remapping IRQs\n");
     outb(0x20, 0x11); // Start PIC1 initialization
     outb(0xA0, 0x11); // Start PIC2 initialization
     outb(0x21, 0x20); // Remap PIC1 to 0x20-0x27 (32-39)
@@ -47,14 +45,10 @@ void irq_remap(void)
 /// @brief To be called in kernel main
 void irq_install()
 {
-    printf("Installing IRQs\n");
     irq_remap();
-
-    printf("IRQ 1 should be at IDT entry 33, set to address %p\n", irq_stub_table[1]);
 
     for (uint8_t vector = 0; vector < 16; vector++)
     {
-        printf("Setting IDT descriptor for IRQ %d\n", vector); // Debug print
         idt_set_descriptor(vector + 32, (unsigned)irq_stub_table[vector], 0x08, 0x8E);
     }
 }
@@ -66,7 +60,6 @@ void irq_handler(struct regs *r)
     void (*handler)(struct regs *r);
 
     handler = irq_routines[r->int_no - 32];
-    printf("IRQ %d triggered, mapped index %d\n", r->int_no, r->int_no - 32);
 
     // If IDT entry is greater than 40 (meaning IRQ 8-15), send EOI to the second (0xA0)
     if (r->int_no >= 40)
@@ -79,7 +72,6 @@ void irq_handler(struct regs *r)
 
     if (handler)
     {
-        printf("Calling handler for IRQ %d\n", r->int_no - 32);
         handler(r);
     }
     else
