@@ -1,7 +1,6 @@
 #include <kernel/irq.h>
 #include <kernel/tty.h>
 #include <kernel/kb.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 /// @brief Defines keyboard layout (default: US)
@@ -103,7 +102,6 @@ unsigned char kb_us[128] = {
 void keyboard_handler(struct regs *r)
 {
     unsigned char scancode;
-    printf("kb interrupt");
 
     // Read from the keyboard data buffer
     scancode = inb(0x60);
@@ -123,6 +121,5 @@ void keyboard_handler(struct regs *r)
 /// @brief Install IRQ handler for keyboard interrupt
 void keyboard_install(void)
 {
-    printf("Installing keyboard handler\n");
     register_request_handler(1, keyboard_handler);
 }
