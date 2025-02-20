@@ -103,7 +103,7 @@ int printf(const char *restrict format, ...)
 			{
 				return -1;
 			}
-			len += printint(i, 16, 1);
+			len += printint(i, 16, 0);
 			if (maxrem < len)
 			{
 				// TODO: Set errno to EOVERFLOW.
