@@ -10,6 +10,7 @@
 #include <kernel/tty.h>
 #include <kernel/kb.h>
 #include <kernel/mm.h>
+#include <kernel/paging.h>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -26,7 +27,7 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	/* Make sure the magic number matches for memory mapping*/
 	if (magic != MULTIBOOT_BOOTLOADER_MAGIC)
 	{
-		printf("Invalid magic number\n"); // Use panic instead
+		PANIC("Invalid magic number\n");
 		return 1;
 	}
 
@@ -37,7 +38,7 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	/* Check bit 6 to see if we have a valid memory map */
 	if (!(mbt->flags >> 6 & 0x1))
 	{
-		printf("Invalid memory map given by GRUB bootloader\n"); // Use panic instead
+		PANIC("Invalid memory map given by GRUB bootloader");
 		return 1;
 	}
 
@@ -53,10 +54,14 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 
 	// Refer to https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Example-boot-loader-code about multiboot info
 
-	printf("\nMultiboot magic : %x\n", magic);
-	printf("Multiboot mods  : %d\n", mbt->mods_count); // Must be after terminal_init
-	printf("\nInitial stack : %x\n", initial_esp);
-	printf("\nInitrd start : %x\n", (unsigned int)initrd_location); // Currently broken! Fix this!
+	printf("\nMultiboot magic   : %x\n", magic);
+	printf("Multiboot mods    : %d\n", mbt->mods_count); // Must be after terminal_init
+	printf("Initial stack     : %x\n", initial_esp);
+	printf("Initrd start      : %x\n", (unsigned int)initrd_location); // Currently broken! Fix this!
+
+	paging_initialize();
+
+	printf("\n##### OS successfully booted! #####\n");
 
 	asm volatile("sti");
 	__asm__ volatile("sti"); // Enable interrupts
