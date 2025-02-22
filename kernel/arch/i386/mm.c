@@ -18,6 +18,7 @@ uint32_t ramStartLocation;
 /// @brief Address the kheap is initialized; should be declared in kheap.c?
 uint32_t placement_address;
 int memAmount;
+/// @brief Amount of memory usable for allocation after the kernel
 int memUsable;
 
 /// @brief The beginning of initial RAM disk; defined in kernel.c
