@@ -31,14 +31,20 @@ extern int memUsable;              // Defined in mm.c
 /// @param page_directory
 void enable_paging(page_directory_t *page_directory)
 {
+    printf("\nenable_paging USING: &tablesPhysical : %x", &page_directory->tablesPhysical);
+    printf("\nenable_paging tablesPhysical : %x", page_directory->tablesPhysical);
+    printf("\nenable_paging &physicalAddr : %x", &page_directory->physicalAddr);
+    printf("\nenable_paging physicalAddr :  %x", page_directory->physicalAddr);
+
     uint32_t cr0;
     current_directory = page_directory;
 
     printf("11\n");
-    asm volatile("mov %0, %%cr3" ::"r"(&page_directory->physicalAddr));
+    asm volatile("mov %0, %%cr3" ::"r"(&page_directory->tablesPhysical)); // for multitasking
+    // asm volatile("mov %0, %%cr3" ::"r"(&page_directory->physicalAddr)); // for debug
     printf("12\n");
     asm volatile("mov %%cr0, %0" : "=r"(cr0));
-    cr0 |= 0x80000000; // Enable paging
+    cr0 |= 0x80000001; // Enable paging and protection
     printf("13\n");
     asm volatile("mov %0, %%cr0" ::"r"(cr0)); // <- stack here! placement_address? malloc alignment?
     printf("14\n");
@@ -57,13 +63,13 @@ void paging_initialize(void)
 
     // Create the top level page directory
     kernel_directory = (page_directory_t *)kmalloc_aligned(sizeof(page_directory_t));
-    memset(kernel_directory, 0, sizeof(page_directory_t));                       // initialize with 0
+    memset(kernel_directory, 0, sizeof(page_directory_t)); // initialize with 0
     kernel_directory->physicalAddr = (uint32_t)kernel_directory->tablesPhysical; // for multitasking
 
     printf("2\n");
 
     // Create pages for the kernel heap area
-    unsigned int address = 0;
+    uint32_t address = 0;
     for (address = KHEAP_START; address < KHEAP_START + KHEAP_INITIAL_SIZE; address += 0x1000)
     {
         if (address == KHEAP_START)

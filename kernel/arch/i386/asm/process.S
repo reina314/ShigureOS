@@ -24,7 +24,7 @@ copy_physical_page:
     jnz .loop         # Loop if not zero
 
     movl %cr0, %edx         # Get CR0 again
-    orl $0x80000000, %edx   # Set the paging bit (bit 31)
+    orl $0x80000001, %edx   # Set the paging bit (bit 31) and protection bit (bit 1)
     movl %edx, %cr0         # Enable paging
 
     popfl       # Restore EFLAGS
