@@ -9,8 +9,8 @@
 #include <kernel/serial.h>
 #include <kernel/tty.h>
 #include <kernel/kb.h>
-#include <kernel/mm.h>
-#include <kernel/paging.h>
+#include <kernel/pm.h>
+#include <kernel/vm.h>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -50,7 +50,8 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	terminal_initialize();
 	timer_install();
 	keyboard_install();
-	mm_initialize(initrd_location);
+	pm_initialize(initrd_location);
+	vm_initialize();
 
 	// Refer to https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Example-boot-loader-code about multiboot info
 
@@ -58,8 +59,6 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	printf("Multiboot mods    : %d\n", mbt->mods_count); // Must be after terminal_init
 	printf("Initial stack     : %x\n", initial_esp);
 	printf("Initrd start      : %x\n", (unsigned int)initrd_location); // Currently broken! Fix this!
-
-	paging_initialize();
 
 	printf("\n##### OS successfully booted! #####\n");
 
