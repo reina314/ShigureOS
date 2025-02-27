@@ -95,6 +95,18 @@ int printf(const char *restrict format, ...)
 			written += len;
 			break;
 
+		case ('u'): // for unsigned integers
+			format++;
+			i = (int)va_arg(parameters, int);
+			len = printint(i, 10, 0);
+			if (maxrem < len)
+			{
+				// TODO: Set errno to EOVERFLOW.
+				return -1;
+			}
+			written += len;
+			break;
+
 		case ('x'): // for hexadecimal integers
 			format++;
 			i = (int)va_arg(parameters, int);
