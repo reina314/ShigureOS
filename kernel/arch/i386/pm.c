@@ -75,9 +75,9 @@ void pm_initialize(uint32_t initrd_start)
     pm_end = pm_start + pm_amount;
 
     // Add the size of the kernel with 4KB boundary to memory location
-    pm_start += (uint32_t)round_up_to_multiple(ekernel - stext, 4096);
+    pm_start += (uint32_t)round_up_to_multiple(ekernel - stext, FRAME_SIZE);
     // Add the size of the initrd with 4KB boundary to memory location
-    pm_start += (uint32_t)round_up_to_multiple(initrd_size, 4096);
+    pm_start += (uint32_t)round_up_to_multiple(initrd_size, FRAME_SIZE);
 
     // Calculate the amount of memory usable for heap alloc after kernel
     pm_usable = pm_end - pm_start;
@@ -109,7 +109,7 @@ void frame_initialize(void)
     {
         buddy_bitmaps[i].num_bits = nframes / (1 << i);
         int bytes = (buddy_bitmaps[i].num_bits + 7) / 8;                  // Round up to nearest byte
-        buddy_bitmaps[i].bitmap = (uint8_t *)kmalloc(bytes, (i == 0), 0); // Don't align each time!
+        buddy_bitmaps[i].bitmap = (uint8_t *)kmalloc(bytes, (i == 0), 0); // Align only the first time
         memset(buddy_bitmaps[i].bitmap, 0xFF, bytes);                     // Initialize all bits to 1 (free)
     }
 }
@@ -170,18 +170,11 @@ int32_t pmalloc(size_t size)
         for (int j = 0; j <= MAX_ORDER; j++)
         {
             uint32_t start_index = (order >= j) ? (i << (order - j)) : (i >> (j - order));
-            // printf("\norder: %d, start_index: %u", j, start_index);
             if (!is_bit_set(&buddy_bitmaps[j], (int)start_index)) // Check if already marked as used
-            {
-                // printf("\nbit not set (=used) order x index: %d x %u", j, start_index);
                 break;
-            }
 
             for (int k = 0; k < (((order - j) > 0) ? (1 << (order - j)) : 1); k++)
-            {
-                // printf("\norder x index: %d x %d\n", j, (start_index + (uint32_t)k));
                 clear_bit(&buddy_bitmaps[j], (start_index + (uint32_t)k));
-            }
         }
 
         return (int32_t)(i * (1 << order)); // Return starting PFN
@@ -201,20 +194,13 @@ void pfree(uint32_t pfn, size_t size)
     for (int j = 0; j <= MAX_ORDER; j++)
     {
         uint32_t start_index = pfn >> j;
-        // printf("\norder: %d, start_index: %u", j, start_index);
 
         for (int k = 0; k < (((order - j) > 0) ? (1 << (order - j)) : 1); k++)
-        {
-            // printf("\norder x index: %d x %d\n", j, (start_index + (uint32_t)k));
             set_bit(&buddy_bitmaps[j], (start_index + (uint32_t)k));
-        }
 
         if (!is_bit_set(&buddy_bitmaps[order], (start_index ^ 0b1))) // start_index ^ 0b1 is buddy index
-        {
             // Buddy is not free; stop merging
-            // printf("\nbuddy bit not set (=used) order x index: %d x %u", j, (start_index ^ 0b1));
             break;
-        }
     }
 }
 
