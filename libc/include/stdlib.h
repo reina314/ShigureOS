@@ -9,6 +9,10 @@ extern "C"
 {
 #endif
 
+// Types generally used
+#define NULL ((void *)0)
+    typedef unsigned long size_t;
+
     __attribute__((__noreturn__)) void abort(void);
 
     void outb(uint16_t port, uint8_t value); // defined in io.c
