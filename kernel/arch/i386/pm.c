@@ -1,5 +1,5 @@
 #include <kernel/pm.h>
-#include <kernel/kheap.h>
+#include <kernel/vm.h>
 #include <kernel/multiboot.h>
 #include <stdbool.h> // for bool type
 #include <stdlib.h>  // for round_up_to_multiple
