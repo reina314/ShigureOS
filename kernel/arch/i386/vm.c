@@ -23,6 +23,31 @@ heap_t *kheap = 0;
 extern void load_page_directory(uint32_t *); // defined in paging.S
 extern void enable_paging(void);             // definedd in paging.S
 
+#include <stdio.h>
+
+/// @brief Only for debug purpose
+/// @param node
+/// @param depth
+static void
+print_avl_tree(avl_node_t *node, int depth)
+{
+    if (!node)
+        return;
+
+    // Print right subtree first (for a more visual tree representation)
+    print_avl_tree(node->right, depth + 1);
+
+    // Indentation based on depth
+    for (int i = 0; i < depth; i++)
+        printf("    "); // 4 spaces per depth level
+
+    // Print current node
+    printf("Addr: %x | Size: %u | Height: %d\n", node->base, node->size, node->height);
+
+    // Print left subtree
+    print_avl_tree(node->left, depth + 1);
+}
+
 void vm_initialize(void)
 {
     frame_initialize(); // Initialize frame allocator first; defined in pm.c
@@ -69,7 +94,187 @@ void vm_initialize(void)
     load_page_directory(kernel_pd->entries);
     enable_paging();
 
-    // Implement kheap!!!
+    // Initialize the kernel heap
+    kheap = heap_init(KHEAP_START, KHEAP_START + KHEAP_INITIAL_SIZE, KHEAP_MAX_SIZE, false, false);
+
+    // Nothing displayed!! Is this expected behaviour?
+
+    // For multitasking
+    // clone kernel_directory and switch to the clone
+    // current_directory = clone_page_directory(kernel_directory);
+    // switch_page_directory(current_directory);
+    // printf("9\n");
+}
+
+/// @brief Create a heap area ranging from start_addr to end_addr
+/// @param start_addr Must be page-aligned
+/// @param end_addr Must be page-aligned
+/// @param max_size Max size the heap can expands to
+/// @param supervisor If the heap is for kernel or not
+/// @param readonly If the heap is read-only or not
+/// @return The pointer to a heap_t
+heap_t *heap_init(uint32_t start_addr, uint32_t end_addr, uint32_t max_size, bool supervisor, bool readonly)
+{
+    heap_t *heap = (heap_t *)kmalloc(sizeof(heap_t), false, 0);
+    if (!heap)
+        return NULL; // Handle allocation failure
+
+    // Make the start_addr page-aligned
+    if ((start_addr && (PAGE_SIZE - 1)) != 0) // 0xFFF
+    {
+        start_addr &= ~(PAGE_SIZE - 1); // 0xFFFFF000
+        start_addr += PAGE_SIZE;
+    }
+
+    // Make the end_addr page-aligned
+    if ((end_addr && (PAGE_SIZE - 1)) != 0) // 0xFFF
+    {
+        end_addr &= ~(PAGE_SIZE - 1); // 0xFFFFF000
+        end_addr += PAGE_SIZE;
+    }
+
+    heap->root = avl_insert(NULL, start_addr, (size_t)(end_addr - start_addr));
+    heap->start_addr = start_addr;
+    heap->end_addr = end_addr;
+    heap->max_size = max_size;
+    heap->supervisor = supervisor;
+    heap->readonly = readonly;
+
+    return heap;
+}
+
+/// @brief Allocate a size of memory on a heap area
+/// @param heap The pointer to the heap to allocate memory from
+/// @param size In bytes
+/// @return The base address of memory allocated
+uint32_t heap_alloc(heap_t *heap, size_t size)
+{
+    uint32_t alloc_addr;
+    avl_node_t *best_fit = find_best_fit(heap->root, size);
+    if (!best_fit)
+    {
+        alloc_addr = heap->end_addr;
+
+        // Try to expand heap if possible
+        if (expand_heap(heap, size) == (int8_t)-1)
+            return (uint32_t)NULL; // Out of memory
+
+        // Insert new allocation into the AVL tree
+        heap->root = avl_insert(heap->root, alloc_addr, size);
+    }
+    else
+    {
+        // If best-fit block is found, allocate from it
+        alloc_addr = best_fit->base;
+        best_fit->base += size;
+        best_fit->size -= size;
+
+        if (best_fit->size == 0)
+            heap->root = avl_delete(heap->root, best_fit->base);
+    }
+
+    return alloc_addr;
+}
+
+/// @brief Free a size of memory located at the base address; basically a wrapper for avl_insert() with some coalescing (merging) feature
+/// @param heap The pointer to the heap to free memory from
+/// @param base Base address of memory to free
+/// @param size In bytes
+void heap_free(heap_t *heap, uint32_t base, size_t size)
+{
+    // Validate input; prevent out-of-bounds or zero-sited frees
+    if (size == 0 || base < heap->start_addr || (base + size) > heap->end_addr)
+    {
+        printf("Invalid free request: Base=%x, Size=%x\n", base, size);
+        return;
+    }
+
+    // Verify that the entire requested region is free
+    avl_node_t *current = heap->root;
+    while (current)
+    {
+        // Check if any allocated block overlaps with the range being freed
+        if ((base >= current->base && base < current->base + current->size) ||               // Base inside allocated block
+            (base + size > current->base && base + size <= current->base + current->size) || // End inside allocated block
+            (base < current->base && base + size > current->base + current->size))           // Completely overlaps
+        {
+            printf("Overlapping free detected at %x (Size: %x)\n", base, size);
+            return;
+        }
+
+        if (base < current->base)
+            current = current->left;
+        else
+            current = current->right;
+    }
+
+    // Find potential neighboring free blocks
+    avl_node_t *left_neighbor = NULL, *right_neighbor = NULL;
+    current = heap->root;
+
+    while (current)
+    {
+        if (current->base + current->size == base)
+            left_neighbor = current;
+        else if ((base + size) == current->base)
+            right_neighbor = current;
+
+        if (left_neighbor && right_neighbor)
+            break;
+
+        if (base < current->base)    // If the target node is located on the left side of current
+            current = current->left; // Move left
+        else
+            current = current->right; // Move right
+    }
+
+    // Merge with adjacent free blocks
+    if (left_neighbor)
+    {
+        base = left_neighbor->base;
+        size += left_neighbor->size;
+        heap->root = avl_delete(heap->root, left_neighbor->base);
+    }
+    if (right_neighbor)
+    {
+        size += right_neighbor->size;
+        heap->root = avl_delete(heap->root, right_neighbor->base);
+    }
+
+    // Check if heap->root is NULL or not
+    // I know this ternary is redundant but somehow it doesn't work otherwise
+    heap->root = (heap->root) ? avl_insert(heap->root, base, size) : avl_insert(NULL, base, size);
+}
+
+/// @brief Expand a heap area if possible
+/// @param heap The pointer to the heap to expand
+/// @param size Size-delta in bytes
+/// @return 0 if success; -1 if the size is beyond heap's max_size
+int8_t expand_heap(heap_t *heap, size_t size)
+{
+    uint32_t new_end_addr = heap->end_addr + (uint32_t)size;
+    // Round up to the nearest page boundary
+    if ((new_end_addr & PAGE_SIZE) != 0) // Not aligned with 0x1000
+    {
+        new_end_addr &= ~(PAGE_SIZE - 1); // ~(PAGE_SIZE - 1) = ~0xFFF = 0xFFFFF000
+        new_end_addr += PAGE_SIZE;
+    }
+
+    if (new_end_addr > heap->start_addr + heap->max_size)
+        return -1; // Beyond heap's max end address
+
+    // Make sure that kmalloc increases placement_address each time by using while loop
+    uint32_t temp_end_addr = heap->end_addr;
+    while (temp_end_addr < new_end_addr)
+    {
+        alloc_frame(get_page(temp_end_addr, kernel_pd, true),
+                    (heap->supervisor) ? true : false,
+                    (heap->readonly) ? false : true);
+        temp_end_addr += PAGE_SIZE;
+    }
+
+    heap->end_addr = new_end_addr;
+    return 0; // Success
 }
 
 /// @brief Allocate virtual memory on kernel heap
@@ -231,7 +436,7 @@ void alloc_frame(pte_t *page, bool kernel, bool writable)
 /// @param base Virtual address
 /// @param size Size of the block
 /// @return Virtual address for the AVL node
-avl_node_t *create_node(uint32_t base, size_t size)
+static avl_node_t *create_node(uint32_t base, size_t size)
 {
     // avl_node_t *node;
     avl_node_t *node = (avl_node_t *)kmalloc(sizeof(avl_node_t), false, 0); // DEFINE malloc!!!!!
@@ -240,7 +445,6 @@ avl_node_t *create_node(uint32_t base, size_t size)
     node->height = 1;
     node->left = node->right = NULL;
 
-    printf("ok!\n");
     return node;
 }
 
@@ -293,15 +497,15 @@ static avl_node_t *rotate_left(avl_node_t *x) // A
 /// @param base Base virtual address to insert into
 /// @param size
 /// @return
-avl_node_t *insert(avl_node_t *node, uint32_t base, size_t size)
+avl_node_t *avl_insert(avl_node_t *node, uint32_t base, size_t size)
 {
     if (!node)
         return create_node(base, size);
 
     if (base < node->base)
-        node->left = insert(node->left, base, size);
+        node->left = avl_insert(node->left, base, size);
     else if (base > node->base)
-        node->right = insert(node->right, base, size);
+        node->right = avl_insert(node->right, base, size);
     else
         return node; // Duplicate base address
 
@@ -339,7 +543,7 @@ avl_node_t *insert(avl_node_t *node, uint32_t base, size_t size)
 /// @brief Find the node with the smallest base (used for deletion)
 /// @param node
 /// @return
-avl_node_t *find_min(avl_node_t *node)
+avl_node_t *find_min_base(avl_node_t *node)
 {
     while (node->left)
         node = node->left;
@@ -349,29 +553,34 @@ avl_node_t *find_min(avl_node_t *node)
 /// @brief Delete a virtual address block from AVL tree
 /// @param root
 /// @param base The virtual address of the block to delete
-/// @return
-avl_node_t *delete(avl_node_t *root, uint32_t base)
+/// @return The pointer to new root node; NULL if the last-remained node
+avl_node_t *avl_delete(avl_node_t *root, uint32_t base)
 {
     if (!root)
         return root;
 
     if (base < root->base)
-        root->left = delete (root->left, base);
+        root->left = avl_delete(root->left, base);
     else if (base > root->base)
-        root->right = delete (root->right, base);
-    else
+        root->right = avl_delete(root->right, base);
+    else // now root is the target of deletion
     {
-        if (!root->left || !root->right)
+        if (!root->left && !root->right) // Leaf node
+        {
+            kfree(root); // DEFINE kfree!!!
+            return NULL;
+        }
+        else if (!root->left || !root->right) // Only one child exists
         {
             avl_node_t *temp = root->left ? root->left : root->right;
             kfree(root); // DEFINE free !!!
             return temp;
         }
 
-        avl_node_t *temp = find_min(root->right);
+        avl_node_t *temp = find_min_base(root->right);
         root->base = temp->base;
         root->size = temp->size;
-        root->right = delete (root->right, temp->base);
+        root->right = avl_delete(root->right, temp->base);
     }
 
     if (!root)
@@ -401,39 +610,26 @@ avl_node_t *delete(avl_node_t *root, uint32_t base)
     return root;
 }
 
-/// @brief Find a free block for allocation
-/// @param root
-/// @param size
-/// @return NULL if not found
-avl_node_t *allocate(avl_node_t *root, size_t size)
+/// @brief Search for a best-fit (smallest) block for given size recursively
+/// @param node AVL root node to search inside
+/// @param size In bytes
+/// @return The pointer to the best-fit node; NULL if not found
+avl_node_t *find_best_fit(avl_node_t *node, size_t size)
 {
-    if (!root)
+    if (!node)
         return NULL;
 
-    if (root->size >= size)
+    avl_node_t *best = NULL;
+    if (node->size >= size)
     {
-        avl_node_t *allocated = create_node(root->base, size);
-        root = delete (root, root->base);
-        return allocated;
+        best = node;
+        avl_node_t *left_best = find_best_fit(node->left, size);
+        if (left_best && left_best->size < best->size)
+            best = left_best;
     }
 
-    avl_node_t *left_result = allocate(root->left, size);
-    if (left_result)
-        return left_result;
-
-    return allocate(root->right, size);
-}
-
-/// @brief Print AVL tree in-order traversal
-/// @param root
-void inorder(avl_node_t *root)
-{
-    if (!root)
-        return;
-
-    inorder(root->left);
-    printf("Base: %x, Size: %d\n", root->base, root->size);
-    inorder(root->right);
+    // Return left-most node if available
+    return best ? best : find_best_fit(node->right, size);
 }
 
 void free_tree(avl_node_t *root)

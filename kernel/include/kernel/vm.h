@@ -29,6 +29,7 @@
 // Heap (all virtual address)
 #define KHEAP_START 0xC0000000
 #define KHEAP_INITIAL_SIZE 0x100000
+#define KHEAP_MAX_SIZE 0xCFFFF000
 #define HEAP_MAGIC 0xDEADBABE
 #define HEAP_MIN_SIZE 0x70000
 
@@ -71,20 +72,24 @@ typedef struct heap
     uint32_t start_addr; // Start of the heap
     uint32_t end_addr;   // Current end of the heap (may expand)
     uint32_t max_size;   // Maximum heap size
+    bool supervisor;     // If the heap is priviledged or not
+    bool readonly;       // If the heap is read protected or not
 } heap_t;
 
 void vm_initialize(void);
+heap_t *heap_init(uint32_t start_addr, uint32_t end_addr, uint32_t max_size, bool supervisor, bool readonly);
+uint32_t heap_alloc(heap_t *heap, size_t size);
+void heap_free(heap_t *heap, uint32_t base, size_t size);
+int8_t expand_heap(heap_t *heap, size_t size);
 uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr);
 void kfree(void *p);
 void *malloc(uint32_t, bool, heap_t *);
 pte_t *get_page(uint32_t vaddr, page_directory_t *pd, bool create);
 void page_fault(struct regs *regs);
 void alloc_frame(pte_t *page, bool kernel, bool writable);
-avl_node_t *insert(avl_node_t *, uint32_t, size_t);
-avl_node_t *delete(avl_node_t *, uint32_t);
-avl_node_t *allocate(avl_node_t *, size_t);
-avl_node_t *deallocate(avl_node_t *, uint32_t, size_t);
+avl_node_t *avl_insert(avl_node_t *, uint32_t, size_t);
+avl_node_t *avl_delete(avl_node_t *, uint32_t);
+avl_node_t *find_best_fit(avl_node_t *node, size_t size);
 void free_tree(avl_node_t *);
-void inorder(avl_node_t *);
 
 #endif
