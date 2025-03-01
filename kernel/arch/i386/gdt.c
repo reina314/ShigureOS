@@ -1,6 +1,5 @@
 #include <kernel/gdt.h>
 #include <stdint.h>
-#include <stdio.h>
 
 /// @brief Entry format in GDT
 struct gdt_entry
