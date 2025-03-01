@@ -30,8 +30,9 @@
 #define KHEAP_START 0xC0000000
 #define KHEAP_INITIAL_SIZE 0x100000
 #define KHEAP_MAX_SIZE 0xCFFFF000
-#define HEAP_MAGIC 0xDEADBABE
+#define HEAP_MAGIC 0x5AFE205E
 #define HEAP_MIN_SIZE 0x70000
+// #define HEAP_HEADER_ALIGNMENT 8 // Amount of Alignment (bytes) for heap header
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -65,6 +66,14 @@ typedef struct avl_node
     struct avl_node *left, *right;
 } avl_node_t;
 
+/// @brief Structure for heap block header
+typedef struct header
+{
+    uint32_t magic; // Used for error checking and identification
+    size_t size;    // Size of the allocated block excluding header
+    // Add any options if necessary
+} header_t;
+
 /// @brief Structure for heap area
 typedef struct heap
 {
@@ -78,18 +87,17 @@ typedef struct heap
 
 void vm_initialize(void);
 heap_t *heap_init(uint32_t start_addr, uint32_t end_addr, uint32_t max_size, bool supervisor, bool readonly);
-uint32_t heap_alloc(heap_t *heap, size_t size);
-void heap_free(heap_t *heap, uint32_t base, size_t size);
-int8_t expand_heap(heap_t *heap, size_t size);
+void *malloc(uint32_t size, bool page_align, heap_t *heap);
 uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr);
-void kfree(void *p);
-void *malloc(uint32_t, bool, heap_t *);
+void free(heap_t *heap, void *ptr);
+void kfree(void *ptr);
 pte_t *get_page(uint32_t vaddr, page_directory_t *pd, bool create);
 void page_fault(struct regs *regs);
 void alloc_frame(pte_t *page, bool kernel, bool writable);
+void free_frame(pte_t *page);
 avl_node_t *avl_insert(avl_node_t *, uint32_t, size_t);
 avl_node_t *avl_delete(avl_node_t *, uint32_t);
 avl_node_t *find_best_fit(avl_node_t *node, size_t size);
-void free_tree(avl_node_t *);
+void free_avl_tree(avl_node_t *node);
 
 #endif

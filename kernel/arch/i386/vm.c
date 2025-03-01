@@ -3,6 +3,7 @@
 #include <kernel/isr.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h> // for align()
 #include <string.h>
 #include <stdio.h> // for debug
 #include "regs.h"
@@ -28,8 +29,7 @@ extern void enable_paging(void);             // definedd in paging.S
 /// @brief Only for debug purpose
 /// @param node
 /// @param depth
-static void
-print_avl_tree(avl_node_t *node, int depth)
+static void print_avl_tree(avl_node_t *node, int depth)
 {
     if (!node)
         return;
@@ -97,8 +97,6 @@ void vm_initialize(void)
     // Initialize the kernel heap
     kheap = heap_init(KHEAP_START, KHEAP_START + KHEAP_INITIAL_SIZE, KHEAP_MAX_SIZE, false, false);
 
-    // Nothing displayed!! Is this expected behaviour?
-
     // For multitasking
     // clone kernel_directory and switch to the clone
     // current_directory = clone_page_directory(kernel_directory);
@@ -112,26 +110,16 @@ void vm_initialize(void)
 /// @param max_size Max size the heap can expands to
 /// @param supervisor If the heap is for kernel or not
 /// @param readonly If the heap is read-only or not
-/// @return The pointer to a heap_t
+/// @return The pointer to heap_t
 heap_t *heap_init(uint32_t start_addr, uint32_t end_addr, uint32_t max_size, bool supervisor, bool readonly)
 {
     heap_t *heap = (heap_t *)kmalloc(sizeof(heap_t), false, 0);
     if (!heap)
         return NULL; // Handle allocation failure
 
-    // Make the start_addr page-aligned
-    if ((start_addr && (PAGE_SIZE - 1)) != 0) // 0xFFF
-    {
-        start_addr &= ~(PAGE_SIZE - 1); // 0xFFFFF000
-        start_addr += PAGE_SIZE;
-    }
-
-    // Make the end_addr page-aligned
-    if ((end_addr && (PAGE_SIZE - 1)) != 0) // 0xFFF
-    {
-        end_addr &= ~(PAGE_SIZE - 1); // 0xFFFFF000
-        end_addr += PAGE_SIZE;
-    }
+    // Make sure start_addr & end_addr are page-aligned
+    start_addr = ALIGN(start_addr, PAGE_SIZE);
+    end_addr = ALIGN(end_addr, PAGE_SIZE);
 
     heap->root = avl_insert(NULL, start_addr, (size_t)(end_addr - start_addr));
     heap->start_addr = start_addr;
@@ -143,37 +131,131 @@ heap_t *heap_init(uint32_t start_addr, uint32_t end_addr, uint32_t max_size, boo
     return heap;
 }
 
+/// @brief Expand a heap area if possible
+/// @param heap The pointer to the heap to expand
+/// @param size Size-delta in bytes
+/// @return The entire size of the heap area after allocation; 0 if any error
+static uint32_t expand_heap(heap_t *heap, size_t size)
+{
+    uint32_t new_end_addr = heap->end_addr + (uint32_t)size;
+    // Page-align new end address
+    new_end_addr = ALIGN(new_end_addr, PAGE_SIZE);
+
+    if (new_end_addr > heap->start_addr + heap->max_size)
+        return 0; // Beyond heap's max end address
+
+    // Make sure that kmalloc increases placement_address each time by using while loop
+    uint32_t temp_end_addr = heap->end_addr;
+    while (temp_end_addr < new_end_addr)
+    {
+        alloc_frame(get_page(temp_end_addr, kernel_pd, true),
+                    (heap->supervisor) ? true : false,
+                    (heap->readonly) ? false : true);
+        temp_end_addr += PAGE_SIZE;
+    }
+
+    heap->end_addr = new_end_addr;
+    return heap->end_addr - heap->start_addr; // Success
+}
+
+/// @brief Reduce a heap area if possible
+/// @param heap The pointer to the heap to reduce
+/// @param size Size-delta in bytes
+/// @return The entire size of the heap area after reduction; 0 if any error
+static uint32_t reduce_heap(heap_t *heap, size_t size)
+{
+    uint32_t new_end_addr = heap->end_addr - (uint32_t)size;
+    // Page-align new end address
+    new_end_addr = ALIGN(new_end_addr, PAGE_SIZE);
+    if (new_end_addr == heap->end_addr)
+        // If aligned end address remains the same, do nothing
+        return 0;
+
+    // Shouldn't go smaller than HEAP_MIN_SIZE
+    if ((new_end_addr - heap->start_addr) < HEAP_MIN_SIZE)
+        new_end_addr = heap->start_addr + HEAP_MIN_SIZE;
+
+    if (new_end_addr > heap->start_addr + heap->max_size)
+        return 0; // Beyond heap's max end address
+
+    // Make sure that kmalloc increases placement_address each time by using while loop
+    uint32_t temp_end_addr = heap->end_addr - PAGE_SIZE;
+    while (new_end_addr < temp_end_addr)
+    {
+        free_frame(get_page(temp_end_addr, kernel_pd, false));
+        temp_end_addr -= PAGE_SIZE;
+    }
+
+    heap->end_addr = new_end_addr;
+    return heap->end_addr - heap->start_addr; // Success
+}
+
 /// @brief Allocate a size of memory on a heap area
 /// @param heap The pointer to the heap to allocate memory from
+/// @param page_align Should the allocated memory be page-aligned or not
 /// @param size In bytes
 /// @return The base address of memory allocated
-uint32_t heap_alloc(heap_t *heap, size_t size)
+static uint32_t heap_alloc(heap_t *heap, bool page_align, size_t size)
 {
     uint32_t alloc_addr;
-    avl_node_t *best_fit = find_best_fit(heap->root, size);
+    header_t *header;
+
+    // If page-align specified, add PAGE_SIZE - 1 (Max alignment offset) to size for alignment
+    avl_node_t *best_fit = (page_align) ? find_best_fit(heap->root, size + (size_t)(PAGE_SIZE - 1) + sizeof(header_t)) : find_best_fit(heap->root, size + sizeof(header_t));
+
     if (!best_fit)
     {
         alloc_addr = heap->end_addr;
 
-        // Try to expand heap if possible
-        if (expand_heap(heap, size) == (int8_t)-1)
-            return (uint32_t)NULL; // Out of memory
+        // Page-align if specified
+        if (page_align)
+            alloc_addr = ALIGN(alloc_addr, PAGE_SIZE);
 
-        // Insert new allocation into the AVL tree
-        heap->root = avl_insert(heap->root, alloc_addr, size);
+        // Expand heap if possible
+        if (expand_heap(heap, (size_t)(alloc_addr - heap->end_addr) + size + sizeof(header_t)) == 0) // Return 0
+            return (uint32_t)NULL;                                                                   // Out of memory
+
+        // Store metadata at the beginning of the block
+        header = (header_t *)alloc_addr;
+        header->magic = HEAP_MAGIC;
+        header->size = size;
     }
     else
     {
-        // If best-fit block is found, allocate from it
         alloc_addr = best_fit->base;
-        best_fit->base += size;
-        best_fit->size -= size;
+
+        // If page-alignment is required and alloc_addr is misaligned
+        if (page_align && (alloc_addr & (PAGE_SIZE - 1)) != 0)
+        {
+            uint32_t aligned_addr = ALIGN(alloc_addr, PAGE_SIZE);
+            uint32_t alignment_offset = aligned_addr - alloc_addr;
+
+            // Adjust the free block
+            best_fit->base += alignment_offset + size + sizeof(header_t);
+            best_fit->size -= alignment_offset + size + sizeof(header_t);
+
+            // Insert a new small block before allocated block to avoid fragmentation
+            heap->root = avl_insert(heap->root, alloc_addr, (size_t)alignment_offset);
+
+            alloc_addr = aligned_addr;
+        }
+        else
+        {
+            // Normal allocation from best-fit block
+            best_fit->base += size + sizeof(header_t);
+            best_fit->size -= size + sizeof(header_t);
+        }
 
         if (best_fit->size == 0)
             heap->root = avl_delete(heap->root, best_fit->base);
+
+        // Store metadata at the beginning of the block
+        header = (header_t *)alloc_addr;
+        header->magic = HEAP_MAGIC;
+        header->size = size;
     }
 
-    return alloc_addr;
+    return alloc_addr + (uint32_t)sizeof(header_t);
 }
 
 /// @brief Free a size of memory located at the base address; basically a wrapper for avl_insert() with some coalescing (merging) feature
@@ -246,35 +328,14 @@ void heap_free(heap_t *heap, uint32_t base, size_t size)
     heap->root = (heap->root) ? avl_insert(heap->root, base, size) : avl_insert(NULL, base, size);
 }
 
-/// @brief Expand a heap area if possible
-/// @param heap The pointer to the heap to expand
-/// @param size Size-delta in bytes
-/// @return 0 if success; -1 if the size is beyond heap's max_size
-int8_t expand_heap(heap_t *heap, size_t size)
+/// @brief Allocate virtual memory on a heap; a wrapper for heap_alloc
+/// @param size In bytes
+/// @param page_align Should allocated memory be page-aligned or not
+/// @param heap Heap to allocate memory from
+/// @return The starting virtual address of allocated memory
+void *malloc(uint32_t size, bool page_align, heap_t *heap)
 {
-    uint32_t new_end_addr = heap->end_addr + (uint32_t)size;
-    // Round up to the nearest page boundary
-    if ((new_end_addr & PAGE_SIZE) != 0) // Not aligned with 0x1000
-    {
-        new_end_addr &= ~(PAGE_SIZE - 1); // ~(PAGE_SIZE - 1) = ~0xFFF = 0xFFFFF000
-        new_end_addr += PAGE_SIZE;
-    }
-
-    if (new_end_addr > heap->start_addr + heap->max_size)
-        return -1; // Beyond heap's max end address
-
-    // Make sure that kmalloc increases placement_address each time by using while loop
-    uint32_t temp_end_addr = heap->end_addr;
-    while (temp_end_addr < new_end_addr)
-    {
-        alloc_frame(get_page(temp_end_addr, kernel_pd, true),
-                    (heap->supervisor) ? true : false,
-                    (heap->readonly) ? false : true);
-        temp_end_addr += PAGE_SIZE;
-    }
-
-    heap->end_addr = new_end_addr;
-    return 0; // Success
+    return (void *)heap_alloc(heap, page_align, size);
 }
 
 /// @brief Allocate virtual memory on kernel heap
@@ -287,21 +348,19 @@ uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr)
     if (kheap != 0)
     {
         void *vaddr = malloc(size, page_align, kheap);
-        if (!paddr)
+        if (paddr != 0)
         {
-            ;
+            pte_t *page = get_page((uint32_t)vaddr, kernel_pd, false);
+            *paddr = ((uint32_t)page & 0xFFFFF000) + ((uint32_t)vaddr & 0xFFF);
         }
 
         return (uint32_t)vaddr;
     }
     else
     {
-        if (page_align && ((placement_address & (FRAME_SIZE - 1)) != 0)) // Not page-aligned; 0x1000 - 0x1 = 0xFFF
-        {
-            // Page-align placement_address
-            placement_address &= ~(FRAME_SIZE - 1); // ~(FRAME_SIZE - 1) = ~0xFFF = 0xFFFFF000
-            placement_address += FRAME_SIZE;
-        }
+        // add header here!
+        if (page_align)
+            placement_address = ALIGN(placement_address, FRAME_SIZE);
 
         if (paddr)
             *paddr = placement_address;
@@ -312,21 +371,33 @@ uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr)
     }
 }
 
-/// @brief Free memory area allocated on kernel heap
-/// @param p
-void kfree(void *p)
+/// @brief Free memory previously allocated on a heap area; a wrapper for heap_free
+/// @param heap The pointer to heap to free memory from
+/// @param ptr The pointer to the memory base
+void free(heap_t *heap, void *ptr)
 {
-    ;
+    if (!heap || !ptr) // NULL pointer or Zero size!
+        return;
+
+    header_t *header = (header_t *)((size_t)ptr - sizeof(header_t));
+
+    if (header->magic != HEAP_MAGIC)
+    {
+        printf("Invalid magic number\n");
+        return;
+    }
+
+    // Get the full block size (including header)
+    size_t block_size = header->size + sizeof(header_t);
+    heap_free(heap, (uint32_t)header, block_size);
 }
 
-/// @brief Allocate virtual memory on a heap and return its starting virtual address
-/// @param size In bytes
-/// @param page_align Should allocated memory be page-aligned or not
-/// @param heap Heap to allocate memory from
-/// @return
-void *malloc(uint32_t size, bool page_align, heap_t *heap)
+/// @brief Free memory area allocated on kernel heap
+/// @param ptr The pointer to the memory base
+/// @param size Size of contiguous memory to free
+void kfree(void *ptr)
 {
-    ;
+    return free(kheap, ptr);
 }
 
 /// @brief Get a page from a page directory
@@ -421,7 +492,7 @@ void alloc_frame(pte_t *page, bool kernel, bool writable)
         return;
 
     // Allocate physical frame and get its PFN
-    int32_t pfn = pmalloc(PAGE_SIZE);
+    int32_t pfn = pmalloc(FRAME_SIZE);
     if (pfn == -1)
         PANIC("No free frames");
 
@@ -431,6 +502,19 @@ void alloc_frame(pte_t *page, bool kernel, bool writable)
     if (writable)
         *page |= PAGE_RW; // Set RW flag
 }
+
+/// @brief Free a frame from a page
+/// @param page
+void free_frame(pte_t *page)
+{
+    uint32_t pfn = PTE_TO_PFN(*page);
+    if (!pfn) // If already freed
+        return;
+
+    // Free physical frame
+    pfree(pfn, FRAME_SIZE);
+    *page &= PAGE_RW; // Only RW bit is set
+};
 
 /// @brief Create a new AVL node
 /// @param base Virtual address
@@ -496,9 +580,13 @@ static avl_node_t *rotate_left(avl_node_t *x) // A
 /// @param node
 /// @param base Base virtual address to insert into
 /// @param size
-/// @return
+/// @return The pointer to the node; node if error
 avl_node_t *avl_insert(avl_node_t *node, uint32_t base, size_t size)
 {
+    // Input validation
+    if (size == 0)
+        return node;
+
     if (!node)
         return create_node(base, size);
 
@@ -567,13 +655,13 @@ avl_node_t *avl_delete(avl_node_t *root, uint32_t base)
     {
         if (!root->left && !root->right) // Leaf node
         {
-            kfree(root); // DEFINE kfree!!!
+            // kfree(root);
             return NULL;
         }
         else if (!root->left || !root->right) // Only one child exists
         {
             avl_node_t *temp = root->left ? root->left : root->right;
-            kfree(root); // DEFINE free !!!
+            // kfree(root);
             return temp;
         }
 
@@ -632,12 +720,12 @@ avl_node_t *find_best_fit(avl_node_t *node, size_t size)
     return best ? best : find_best_fit(node->right, size);
 }
 
-void free_tree(avl_node_t *root)
+void free_avl_tree(avl_node_t *root)
 {
     if (!root)
         return;
 
-    free_tree(root->left);
-    free_tree(root->right);
-    kfree(root); // DEFINE free!!!
+    free_avl_tree(root->left);
+    free_avl_tree(root->right);
+    // kfree(root);
 }
