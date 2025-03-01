@@ -34,8 +34,6 @@ stdio/putchar.o \
 stdio/puts.o \
 stdlib/abort.o \
 stdlib/io.o \
-stdlib/round.o \
-stdlib/ordered_array.o \
 string/memcmp.o \
 string/memcpy.o \
 string/memmove.o \
