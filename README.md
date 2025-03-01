@@ -17,6 +17,8 @@ It is currently developed for x86 systems (specifically i686-elf target), but in
 ## Features
 - GDT & IDT 
 - ISR & IRQ
+- Paging
+- Kernel heap
 - Keyboard driver
 - Serial driver
 
