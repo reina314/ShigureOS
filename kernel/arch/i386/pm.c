@@ -2,7 +2,7 @@
 #include <kernel/vm.h>
 #include <kernel/multiboot.h>
 #include <stdbool.h> // for bool type
-#include <stdlib.h>  // for round_up_to_multiple
+#include <stdlib.h>  // for align()
 #include <stddef.h>  // for size_t
 #include <string.h>  // for memset
 #include <stdio.h>   // for printf
@@ -75,9 +75,9 @@ void pm_initialize(uint32_t initrd_start)
     pm_end = pm_start + pm_amount;
 
     // Add the size of the kernel with 4KB boundary to memory location
-    pm_start += (uint32_t)round_up_to_multiple(ekernel - stext, FRAME_SIZE);
+    pm_start += (uint32_t)ALIGN(ekernel - stext, FRAME_SIZE);
     // Add the size of the initrd with 4KB boundary to memory location
-    pm_start += (uint32_t)round_up_to_multiple(initrd_size, FRAME_SIZE);
+    pm_start += (uint32_t)ALIGN(initrd_size, FRAME_SIZE);
 
     // Calculate the amount of memory usable for heap alloc after kernel
     pm_usable = pm_end - pm_start;
@@ -210,7 +210,7 @@ void frame_cleanup(void)
 {
     for (int i = 0; i <= MAX_ORDER; i++)
     {
-        kfree(buddy_bitmaps[i].bitmap); // DEFINE free!!!
+        // kfree(buddy_bitmaps[i].bitmap); // DEFINE free!!!
         buddy_bitmaps[i].bitmap = NULL;
     }
 }
