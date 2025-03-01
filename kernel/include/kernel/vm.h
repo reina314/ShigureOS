@@ -53,8 +53,9 @@ typedef struct page_table
 /// @brief Structure for page directory
 typedef struct page_directory
 {
-    page_table_t *tables[PD_ENTRIES]; // Pointers to each page table
     pde_t entries[PD_ENTRIES];        // [31:12] paddr of PT; [11:0] flags
+    page_table_t *tables[PD_ENTRIES]; // Pointers to each page table
+    uint32_t paddr_pde                // Physical address of entries[]
 } page_directory_t;
 
 /// @brief Structure for each AVL node
@@ -91,6 +92,9 @@ void *malloc(uint32_t size, bool page_align, heap_t *heap);
 uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr);
 void free(heap_t *heap, void *ptr);
 void kfree(void *ptr);
+void switch_page_directory(page_directory_t *pd);
+page_table_t *clone_page_table(page_table_t *src_pt, uint32_t *paddr);
+page_directory_t *clone_page_directory(page_directory_t *src_pd);
 pte_t *get_page(uint32_t vaddr, page_directory_t *pd, bool create);
 void page_fault(struct regs *regs);
 void alloc_frame(pte_t *page, bool kernel, bool writable);

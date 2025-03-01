@@ -57,6 +57,7 @@ void vm_initialize(void)
     memset(kernel_pd, 0, sizeof(page_directory_t));
     for (int index = 0; index < PD_ENTRIES; index++)
         kernel_pd->entries[index] = (uint32_t)TABLE_RW;
+    kernel_pd->paddr_pde = (uint32_t)kernel_pd->entries;
 
     uint32_t vaddr;
 
@@ -91,17 +92,18 @@ void vm_initialize(void)
     register_interrupt_handler(14, page_fault);
 
     // Enable paging
-    load_page_directory(kernel_pd->entries);
+    load_page_directory((uint32_t *)kernel_pd->paddr_pde);
     enable_paging();
 
     // Initialize the kernel heap
     kheap = heap_init(KHEAP_START, KHEAP_START + KHEAP_INITIAL_SIZE, KHEAP_MAX_SIZE, false, false);
 
     // For multitasking
-    // clone kernel_directory and switch to the clone
-    // current_directory = clone_page_directory(kernel_directory);
-    // switch_page_directory(current_directory);
-    // printf("9\n");
+    // Clone kernel_pd and switch to the clone
+    current_pd = clone_page_directory(kernel_pd);
+    // printf("\nkernel_pd  : %x", kernel_pd->paddr_pde);
+    // printf("\ncurrent_pd : %x\n", current_pd->paddr_pde);
+    switch_page_directory(current_pd);
 }
 
 /// @brief Create a heap area ranging from start_addr to end_addr
@@ -209,13 +211,13 @@ static uint32_t heap_alloc(heap_t *heap, bool page_align, size_t size)
 
         // Page-align if specified
         if (page_align)
-            alloc_addr = ALIGN(alloc_addr, PAGE_SIZE);
+            alloc_addr = ALIGN(alloc_addr + sizeof(header_t), PAGE_SIZE) - sizeof(header_t);
 
         // Expand heap if possible
-        if (expand_heap(heap, (size_t)(alloc_addr - heap->end_addr) + size + sizeof(header_t)) == 0) // Return 0
+        if (expand_heap(heap, (size_t)(alloc_addr - heap->end_addr) + sizeof(header_t) + size) == 0) // Return 0
             return (uint32_t)NULL;                                                                   // Out of memory
 
-        // Store metadata at the beginning of the block
+        // Store metadata before the allocated block
         header = (header_t *)alloc_addr;
         header->magic = HEAP_MAGIC;
         header->size = size;
@@ -225,19 +227,19 @@ static uint32_t heap_alloc(heap_t *heap, bool page_align, size_t size)
         alloc_addr = best_fit->base;
 
         // If page-alignment is required and alloc_addr is misaligned
-        if (page_align && (alloc_addr & (PAGE_SIZE - 1)) != 0)
+        if (page_align && (alloc_addr & (PAGE_SIZE - 1)) != (PAGE_SIZE - sizeof(header_t)))
         {
-            uint32_t aligned_addr = ALIGN(alloc_addr, PAGE_SIZE);
+            uint32_t aligned_addr = ALIGN(alloc_addr + sizeof(header_t), PAGE_SIZE) - sizeof(header_t);
             uint32_t alignment_offset = aligned_addr - alloc_addr;
 
-            // Adjust the free block
-            best_fit->base += alignment_offset + size + sizeof(header_t);
-            best_fit->size -= alignment_offset + size + sizeof(header_t);
+            // Create a new fragment block before the aligned region if it's large enough
+            if (alignment_offset > sizeof(header_t))
+                heap->root = avl_insert(heap->root, alloc_addr, (size_t)alignment_offset);
 
-            // Insert a new small block before allocated block to avoid fragmentation
-            heap->root = avl_insert(heap->root, alloc_addr, (size_t)alignment_offset);
-
+            // Adjust the best-fit block
             alloc_addr = aligned_addr;
+            best_fit->base = alloc_addr + sizeof(header_t) + size;
+            best_fit->size -= (alignment_offset + sizeof(header_t) + size);
         }
         else
         {
@@ -246,15 +248,17 @@ static uint32_t heap_alloc(heap_t *heap, bool page_align, size_t size)
             best_fit->size -= size + sizeof(header_t);
         }
 
+        // Remove the block if it's completely used
         if (best_fit->size == 0)
             heap->root = avl_delete(heap->root, best_fit->base);
 
-        // Store metadata at the beginning of the block
+        // Store metadata before the allocated block
         header = (header_t *)alloc_addr;
         header->magic = HEAP_MAGIC;
         header->size = size;
     }
 
+    // Return address of actual data excluding header
     return alloc_addr + (uint32_t)sizeof(header_t);
 }
 
@@ -351,7 +355,7 @@ uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr)
         if (paddr != 0)
         {
             pte_t *page = get_page((uint32_t)vaddr, kernel_pd, false);
-            *paddr = ((uint32_t)page & 0xFFFFF000) + ((uint32_t)vaddr & 0xFFF);
+            *paddr = ((uint32_t)*page & 0xFFFFF000) + ((uint32_t)vaddr & 0xFFF);
         }
 
         return (uint32_t)vaddr;
@@ -398,6 +402,109 @@ void free(heap_t *heap, void *ptr)
 void kfree(void *ptr)
 {
     return free(kheap, ptr);
+}
+
+/// @brief Switch page directory
+/// @param pd The pointer to page directory to switch to
+void switch_page_directory(page_directory_t *pd)
+{
+    uint32_t cr0;
+    current_pd = pd;
+
+    asm volatile("mov %0, %%cr3" ::"r"(pd->paddr_pde) : "memory"); // Flush TLB
+    asm volatile("mov %%cr0, %0" : "=r"(cr0));
+    cr0 |= 0x80000000; // Enable paging
+    asm volatile("mov %0, %%cr0" ::"r"(cr0));
+}
+
+/// @brief Copy page to clone physically; defined in process.S
+extern void copy_physical_page(uint32_t, uint32_t);
+
+/// @brief Clone a page table
+/// @param src_pt The pointer to page table to make clone of
+/// @param paddr The pointer to the clone page table
+/// @return The address of cloned page table
+page_table_t *clone_page_table(page_table_t *src_pt, uint32_t *paddr)
+{
+    // Create a new page-aligned page table
+    page_table_t *dest_pt = (page_table_t *)kmalloc(sizeof(page_table_t), true, paddr);
+    memset(dest_pt, 0, sizeof(page_table_t));
+
+    // Copy info for every entry in the table
+    for (int i = 0; i < PT_ENTRIES; i++)
+    {
+        if ((src_pt->entries[i] >> 12) == 0) // If the source PFN is 0, do nothing
+        {
+            dest_pt->entries[i] = (uint32_t)PAGE_RW;
+            continue;
+        }
+
+        // Get a new frame for the page, not kernel, not writable
+        alloc_frame(&dest_pt->entries[i], false, false);
+
+        // Clone the flags
+        if (src_pt->entries[i] & PAGE_PRESENT)
+            dest_pt->entries[i] |= PAGE_PRESENT;
+        if (src_pt->entries[i] & PAGE_RW)
+            dest_pt->entries[i] |= PAGE_RW;
+        if (src_pt->entries[i] & PAGE_USER)
+            dest_pt->entries[i] |= PAGE_USER;
+        if (src_pt->entries[i] & PAGE_ACCESSED)
+            dest_pt->entries[i] |= PAGE_ACCESSED;
+        if (src_pt->entries[i] & PAGE_DIRTY)
+            dest_pt->entries[i] |= PAGE_DIRTY;
+
+        // Copy physical memory pointed by src_pt to the dest_pt; process.S
+        copy_physical_page((src_pt->entries[i] >> 12) * FRAME_SIZE, (dest_pt->entries[i] >> 12) * FRAME_SIZE);
+    }
+
+    return dest_pt;
+}
+
+/// @brief Clone a page directory
+/// @param src_pd The pointer to page directory to make clone of
+/// @return The address of cloned page directory
+page_directory_t *clone_page_directory(page_directory_t *src_pd)
+{
+    uint32_t paddr;
+
+    // Make a new page directory and obtain its physical address
+    page_directory_t *dest_pd = (page_directory_t *)kmalloc(sizeof(page_directory_t), true, &paddr);
+    memset(dest_pd, 0, sizeof(page_directory_t));
+
+    // Get the physical address of the PDE
+    uint32_t offset = (uint32_t)dest_pd->entries - (uint32_t)dest_pd;
+    dest_pd->paddr_pde = paddr + offset;
+
+    // Copy each table unless it is only TABLE_RW (initial value)
+    for (int i = 0; i < PD_ENTRIES; i++)
+    {
+        if (!src_pd->tables[i])
+        {
+            dest_pd->entries[i] = (uint32_t)TABLE_RW;
+            continue;
+        }
+
+        // Decide to link or copy a page;
+        // link if it's part of the kernel (included in kernel_pd), otherwise copy it
+        if (src_pd->tables[i] == kernel_pd->tables[i])
+        {
+            // Link the page using pointer
+            dest_pd->tables[i] = src_pd->tables[i];
+            dest_pd->entries[i] = src_pd->entries[i];
+        }
+        else
+        {
+            // Copy the page
+            dest_pd->tables[i] = clone_page_table(src_pd->tables[i], &paddr);
+            dest_pd->entries[i] = paddr |
+                                  TABLE_PRESENT |
+                                  TABLE_RW |
+                                  TABLE_USER; // Set writable, user, present
+        }
+    }
+
+    return dest_pd;
 }
 
 /// @brief Get a page from a page directory
