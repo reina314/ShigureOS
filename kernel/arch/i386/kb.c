@@ -1,7 +1,7 @@
 #include <kernel/irq.h>
 #include <kernel/tty.h>
 #include <kernel/kb.h>
-#include <stdlib.h>
+#include <stdlib.h> // for inb()
 
 /// @brief Defines keyboard layout (default: US)
 unsigned char kb_us[128] = {
@@ -101,6 +101,7 @@ unsigned char kb_us[128] = {
 /// @param r
 void keyboard_handler(struct regs *r)
 {
+    r = r; // Avoid warning
     unsigned char scancode;
 
     // Read from the keyboard data buffer
