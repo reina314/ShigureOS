@@ -11,8 +11,8 @@ volatile proc_t *ready_queue;
 extern page_directory_t *kernel_pd;                                                           // vm.c
 extern page_directory_t *current_pd;                                                          // vm.c
 extern uint32_t initial_esp;                                                                  // kernel.c
-extern uint32_t get_eip();                                                                    // process.S
-extern void switch_physical_proc(uint32_t eip, uint32_t pd_pddr, uint32_t ebp, uint32_t esp); // process.S
+extern uint32_t get_eip();                                                                    // proc.S
+extern void switch_physical_proc(uint32_t eip, uint32_t pd_pddr, uint32_t ebp, uint32_t esp); // procs.S
 
 /// @brief Next available process id
 uint32_t next_pid = 1;
