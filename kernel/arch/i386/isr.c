@@ -1,6 +1,7 @@
 #include <kernel/isr.h>
 #include <kernel/idt.h>
 #include <stdio.h>
+#include "regs.h"
 
 /// @brief List of registered interrupt handlers
 void *interrupt_handlers[256];
@@ -13,9 +14,7 @@ extern void *isr_stub_table[];
 void isr_install(void)
 {
     for (uint8_t vector = 0; vector < 32; vector++)
-    {
-        idt_set_descriptor(0, (unsigned)isr_stub_table[vector], 0x08, 0x8E);
-    }
+        idt_set_descriptor(vector, (unsigned)isr_stub_table[vector], 0x08, 0x8E);
 }
 
 char *exception_messages[] = {
@@ -78,6 +77,7 @@ void exception_handler(struct regs *r)
         puts("\nException. System halted.");
         puts(exception_messages[r->int_no]);
 
-        __asm__ volatile("cli; hlt");
+        for (;;)
+            ;
     }
 }

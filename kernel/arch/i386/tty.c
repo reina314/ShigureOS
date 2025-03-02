@@ -58,7 +58,7 @@ void terminal_delete_last_line(void)
 {
 	int index;
 
-	for (index = (VGA_HEIGHT - 1) * VGA_WIDTH; index < VGA_HEIGHT * VGA_WIDTH; index++)
+	for (index = (VGA_HEIGHT - 1) * VGA_WIDTH; index < (int)(VGA_HEIGHT * VGA_WIDTH); index++)
 		terminal_buffer[index] = vga_entry(' ', terminal_color);
 }
 
@@ -68,7 +68,7 @@ void terminal_scroll(int line)
 {
 	int index;
 
-	for (index = line * VGA_WIDTH; index < (line + 1) * VGA_WIDTH; index++)
+	for (index = line * VGA_WIDTH; index < (int)((line + 1) * VGA_WIDTH); index++)
 		terminal_buffer[index - VGA_WIDTH] = terminal_buffer[index];
 }
 
@@ -100,7 +100,7 @@ void terminal_putchar(char c)
 
 	if (terminal_y == VGA_HEIGHT)
 	{
-		for (int y = 1; y < VGA_HEIGHT; y++)
+		for (int y = 1; y < (int)VGA_HEIGHT; y++)
 			terminal_scroll(y);
 		terminal_delete_last_line();
 		terminal_x = 0;

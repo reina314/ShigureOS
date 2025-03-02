@@ -1,5 +1,6 @@
 #include <kernel/timer.h>
-#include <kernel/irq.h> // for irq register
+#include <kernel/irq.h>  // for irq register
+#include <kernel/proc.h> // for switch_proc
 
 /// @brief How many times timer_handler is called since booted
 unsigned int timer_ticks = 0;
@@ -11,13 +12,14 @@ int seconds_passed = 0;
 /// @param r Not used
 void timer_handler(struct regs *r)
 {
-    r = r; // avoid unused parameter warning
+    r = r; // Avoid unused parameter warning
     timer_ticks++;
 
+    // Switch proc
+    switch_proc(r);
+
     if ((double)timer_ticks / 18.222 > seconds_passed)
-    {
         seconds_passed++;
-    }
 }
 
 /// @brief To be called in kernel main

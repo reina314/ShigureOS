@@ -11,6 +11,7 @@
 #include <kernel/kb.h>
 #include <kernel/pm.h>
 #include <kernel/vm.h>
+#include <kernel/proc.h>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -52,6 +53,7 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	keyboard_install();
 	pm_initialize(initrd_location);
 	vm_initialize();
+	proc_initialize();
 
 	// Refer to https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Example-boot-loader-code about multiboot info
 
@@ -60,7 +62,23 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	printf("Initial stack     : %x\n", initial_esp);
 	printf("Initrd start      : %x\n", (unsigned int)initrd_location); // Currently broken! Fix this!
 
-	printf("\n##### OS successfully booted! #####\n");
+	printf("\n===== OS successfully booted! =====\n");
+
+	// For debug
+	// page fault testing
+	// printf("\nhello paging world!");
+	// uint32_t *ptr = (uint32_t *)0xA0000000;
+	// uint32_t do_page_fault = *ptr;
+	// printf("\n%x\n", do_page_fault);
+
+	// Tasking testing
+	// int pid_before = getpid();
+	// int ret = fork();
+	// int pid_after = getpid();
+	// printf("\ngetpid() before returned: %d", pid_before);
+	// printf("\nfork() returned: %d", ret);
+	// printf("\ngetpid() after returned: %d", pid_after);
+	// printf("\n==========================================");
 
 	asm volatile("sti");
 	__asm__ volatile("sti"); // Enable interrupts
