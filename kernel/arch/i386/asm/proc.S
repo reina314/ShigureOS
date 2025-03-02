@@ -1,4 +1,23 @@
 .section .text
+.global switch_physical_proc
+.type switch_physical_proc, @function
+switch_physical_proc:
+    cli
+    movl 4(%esp), %ecx  # EIP
+    movl 8(%esp), %eax  # Physical address of current_pd
+    movl 12(%esp), %ebp # EBP
+    movl 16(%esp), %esp # ESP
+    movl %eax, %cr3     # Set page directory
+    movl $0xDEAD, %eax  # Magic number to detect proc switch
+    sti
+    jmp %ecx
+
+.global get_eip
+.type get_eip, @function
+get_eip:
+    popl %eax # Get the return address
+    jmp %eax  # Return; do not use RET because ret addr is already popped off the stack
+
 .global copy_physical_page
 .type copy_physical_page, @function
 copy_physical_page:
