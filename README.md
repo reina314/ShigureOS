@@ -19,6 +19,7 @@ It is currently developed for x86 systems (specifically i686-elf target), but in
 - ISR & IRQ
 - Paging
 - Kernel heap
+- Multitasking
 - Keyboard driver
 - Serial driver
 
