@@ -55,7 +55,7 @@ typedef struct page_directory
 {
     pde_t entries[PD_ENTRIES];        // [31:12] paddr of PT; [11:0] flags
     page_table_t *tables[PD_ENTRIES]; // Pointers to each page table
-    uint32_t paddr_pde                // Physical address of entries[]
+    uint32_t paddr_pde;               // Physical address of entries[]
 } page_directory_t;
 
 /// @brief Structure for each AVL node
