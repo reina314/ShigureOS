@@ -1,6 +1,6 @@
 #include <kernel/vm.h>
 #include <kernel/pm.h>
-#include <kernel/isr.h>
+#include <kernel/isr.h> // for register_interrupt_handler
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h> // for align()
@@ -549,9 +549,13 @@ pte_t *get_page(uint32_t vaddr, page_directory_t *pd, bool create)
 /// @param regs
 void page_fault(struct regs *regs)
 {
+    printf("invoked!\n");
+
     // Faulting address is stored in CR2 register
     uint32_t faulting_address;
     asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
+
+    printf("oops!\n");
 
     // Analyze the error code
     bool present = !(regs->err_code & PAGE_PRESENT); // Page not present
