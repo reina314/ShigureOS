@@ -67,7 +67,7 @@ isr_stub_table:
     .long isr_stub24, isr_stub25, isr_stub26, isr_stub27
     .long isr_stub28, isr_stub29, isr_stub30, isr_stub31
 
-.type ist_common_stub, @function
+.type isr_common_stub, @function
 isr_common_stub:
     pusha
     pushl %ds
