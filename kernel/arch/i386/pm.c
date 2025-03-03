@@ -42,7 +42,7 @@ uint32_t nframes;
 #define INDEX_FROM_PFN(pfn) (pfn / 8)
 #define OFFSET_FROM_PFN(pfn) (pfn % 8)
 
-/// @brief Buddy bitmap that contains status of every frame; used of free
+/// @brief Buddy bitmap that contains status of every frame; used or free
 buddy_bitmap_t buddy_bitmaps[MAX_ORDER + 1];
 
 /// @brief Set up physical memory location; To be called in kernel main
@@ -108,9 +108,9 @@ void frame_initialize(void)
     for (int i = 0; i <= MAX_ORDER; i++)
     {
         buddy_bitmaps[i].num_bits = nframes / (1 << i);
-        int bytes = (buddy_bitmaps[i].num_bits + 7) / 8;                  // Round up to nearest byte
-        buddy_bitmaps[i].bitmap = (uint8_t *)kmalloc(bytes, (i == 0), 0); // Align only the first time
-        memset(buddy_bitmaps[i].bitmap, 0xFF, bytes);                     // Initialize all bits to 1 (free)
+        int bytes = (buddy_bitmaps[i].num_bits + 7) / 8;                   // Round up to nearest byte
+        buddy_bitmaps[i].bitmap = (uint8_t *)ikmalloc(bytes, (i == 0), 0); // Align only the first time
+        memset(buddy_bitmaps[i].bitmap, 0xFF, bytes);                      // Initialize all bits to 1 (free)
     }
 }
 
@@ -210,7 +210,7 @@ void frame_cleanup(void)
 {
     for (int i = 0; i <= MAX_ORDER; i++)
     {
-        // kfree(buddy_bitmaps[i].bitmap); // DEFINE free!!!
+        // kfree(buddy_bitmaps[i].bitmap);
         buddy_bitmaps[i].bitmap = NULL;
     }
 }
