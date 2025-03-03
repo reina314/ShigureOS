@@ -28,7 +28,7 @@ void proc_initialize(void)
     move_stack((void *)0xE0000000, 0x4000);
 
     // Initialize the first process (kernel process)
-    current_proc = ready_queue = (proc_t *)kmalloc(sizeof(proc_t), false, 0);
+    current_proc = ready_queue = (proc_t *)kmalloc(sizeof(proc_t));
     current_proc->id = next_pid++;             // Set and increment
     current_proc->esp = current_proc->ebp = 0; // Init esp & ebp to 0
     current_proc->eip = 0;                     // Init eip to 0
@@ -53,7 +53,7 @@ int fork(void)
     page_directory_t *pd = clone_page_directory(current_proc->pd);
 
     // Create a new proc
-    proc_t *new_proc = (proc_t *)kmalloc(sizeof(proc_t), false, 0);
+    proc_t *new_proc = (proc_t *)kmalloc(sizeof(proc_t));
     new_proc->id = next_pid++;
     new_proc->esp = new_proc->ebp = 0;
     new_proc->eip = 0;
