@@ -12,7 +12,7 @@ int seconds_passed = 0;
 /// @param r Not used
 void timer_handler(struct regs *r)
 {
-    r = r; // Avoid unused parameter warning
+    (void)r; // Avoid unused parameter warning
     timer_ticks++;
 
     // Switch proc
@@ -36,5 +36,5 @@ void timer_wait(int ticks)
     unsigned long eticks;
     eticks = timer_ticks + ticks;
     while (timer_ticks < eticks)
-        ;
+        asm volatile("pause"); // Avoid CPU from spininng too fast
 }
