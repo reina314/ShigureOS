@@ -1,7 +1,39 @@
-#include <kernel/irq.h>
-#include <kernel/tty.h>
 #include <kernel/kb.h>
+#include <kernel/irq.h>
+#include <kernel/sh.h>
+// #include <kernel/tty.h>
 #include <stdlib.h> // for inb()
+#include <stdio.h>
+#include <stdbool.h>
+
+static char keyboard_buffer[KEYBOARD_BUFFER_SIZE];
+static volatile int buffer_start = 0;
+static volatile int buffer_end = 0;
+
+/// @brief Check if buffer is empty or not
+/// @return
+static bool is_buffer_empty(void)
+{
+    return buffer_start == buffer_end;
+}
+
+/// @brief Check if buffer is full or not
+/// @return
+static bool is_buffer_full(void)
+{
+    return ((buffer_end + 1) % KEYBOARD_BUFFER_SIZE) == buffer_start;
+}
+
+/// @brief Push a character into the buffer
+/// @param c
+static void keyboard_buffer_put(char c)
+{
+    if (!is_buffer_full())
+    {
+        keyboard_buffer[buffer_end] = c;
+        buffer_end = (buffer_end + 1) % KEYBOARD_BUFFER_SIZE;
+    }
+}
 
 /// @brief Defines keyboard layout (default: US)
 unsigned char kb_us[128] = {
@@ -101,26 +133,36 @@ unsigned char kb_us[128] = {
 /// @param r
 void keyboard_handler(struct regs *r)
 {
-    r = r; // Avoid warning
-    unsigned char scancode;
+    (void)r; // Avoid unused parameter warning
 
     // Read from the keyboard data buffer
-    scancode = inb(0x60);
+    unsigned char scancode = inb(0x60);
 
     // If the top bit of the input is set, then the key has just been released
-    if (scancode & 0x80)
+    if (!(scancode & 0x80)) // If key is pressed (not released)
     {
-        // Here to check if shift, alt or ctrl key are released
+        char c = kb_us[scancode];
+        keyboard_buffer_put(c); // Store char in buffer
     }
-    else
-    {
-        // Hold a key down, then it triggers multiple interrupts
-        terminal_putchar(kb_us[scancode]);
-    }
+
+    // When key is released
 }
 
 /// @brief Install IRQ handler for keyboard interrupt
 void keyboard_install(void)
 {
     register_request_handler(1, keyboard_handler);
+}
+
+/// @brief Retrieve character from keyboard buffer; FIFO
+/// @return
+char keyboard_getchar(void)
+{
+    while (is_buffer_empty())
+        asm volatile("pause"); // Prevents CPU from spinning too fast
+    // Wait until a key is available
+
+    char c = keyboard_buffer[buffer_start];
+    buffer_start = (buffer_start + 1) % KEYBOARD_BUFFER_SIZE;
+    return c;
 }

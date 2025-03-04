@@ -14,6 +14,7 @@
 #include <kernel/proc.h>
 #include <kernel/fs.h>
 #include <kernel/initrd.h>
+#include <kernel/sh.h>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -63,11 +64,14 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	// Initialize initrd and set it as filesystem root
 	fs_root = initrd_initialize(initrd_location);
 
+	// Display logo
+	terminal_showlogo();
+
 	// For initrd testing
 	char *buffer = (char *)kmalloc(sizeof(char) * 64);
 	// Read a file under root dir
 	read_fs(version_node, 0, version_node->length, (uint8_t *)buffer);
-	printf("\nVersion %s\n", buffer);
+	printf("Version %s\n", buffer);
 	// Read a file under non-root dir
 	fs_node_t *test = finddir_fs(fs_root, "test/test.txt");
 	read_fs(test, 0, test->length, (uint8_t *)buffer);
@@ -102,8 +106,10 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	asm volatile("sti");
 	__asm__ volatile("sti"); // Enable interrupts
 
+	shell_initialize();
+
 	for (;;)
-		;
+		asm volatile("pause"); // Avoid CPU from spinning too fast
 
 	return 0;
 }
