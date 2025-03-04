@@ -149,10 +149,14 @@ void move_stack(void *new_stack_start, size_t size)
 /// @param r
 void switch_proc(struct regs *r)
 {
-    r = r; // Avoid warning
+    (void)r; // Avoid unused parameter warning
 
     // If no process initialized then return
     if (!current_proc)
+        return;
+
+    // If no other process exists the return
+    if (!current_proc->next)
         return;
 
     // Read esp, ebp and eip for saving them later
