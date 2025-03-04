@@ -9,6 +9,7 @@
 #include "regs.h"
 
 extern uint32_t placement_address;
+extern uint32_t initrd_end;
 
 // Extract starting PFN from PTE (page)
 #define PTE_TO_PFN(pte) (pte >> 12)
@@ -65,12 +66,12 @@ void vm_initialize(void)
     // Not allocating the actual memory here because kernel needs identical mapping below
     for (vaddr = KHEAP_START; vaddr < KHEAP_START + KHEAP_INITIAL_SIZE; vaddr += PAGE_SIZE)
     {
-        if (vaddr == KHEAP_START)
-        {
-            pte_t *test_entry = get_page(vaddr, kernel_pd, true);
-            printf("\nFirst page entry  : %x", *test_entry);
-            printf("\nFirst page addr   : %x\n", test_entry);
-        }
+        // if (vaddr == KHEAP_START)
+        // {
+        //     pte_t *test_entry = get_page(vaddr, kernel_pd, true);
+        //     printf("\nFirst page entry  : %x", *test_entry);
+        //     printf("\nFirst page addr   : %x\n", test_entry);
+        // }
         get_page(vaddr, kernel_pd, true);
     }
 
@@ -83,6 +84,14 @@ void vm_initialize(void)
         alloc_frame(get_page(vaddr, kernel_pd, true), false, false);
         vaddr += PAGE_SIZE;
     }
+
+    // Map the initrd identically (it's temp workaround and terrible idea actually)
+    while (vaddr < initrd_end + PAGE_SIZE)
+    {
+        alloc_frame(get_page(vaddr, kernel_pd, true), false, false);
+        vaddr += PAGE_SIZE;
+    }
+    placement_address = initrd_end + PAGE_SIZE;
 
     // Map kheap pages to frames
     for (vaddr = KHEAP_START; vaddr < KHEAP_START + KHEAP_INITIAL_SIZE; vaddr += PAGE_SIZE)
@@ -515,7 +524,7 @@ page_directory_t *clone_page_directory(page_directory_t *src_pd)
     return dest_pd;
 }
 
-/// @brief Get a page from a page directory
+/// @brief Get a page from a virtual address
 /// @param vaddr Virtual address of a page to retrieve
 /// @param pd Page directory to retrieve a page from
 /// @param create Whether to create a new page if not exist
@@ -557,13 +566,9 @@ pte_t *get_page(uint32_t vaddr, page_directory_t *pd, bool create)
 /// @param regs
 void page_fault(struct regs *regs)
 {
-    printf("invoked!\n");
-
     // Faulting address is stored in CR2 register
     uint32_t faulting_address;
     asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
-
-    printf("oops!\n");
 
     // Analyze the error code
     bool present = !(regs->err_code & PAGE_PRESENT); // Page not present
@@ -598,7 +603,7 @@ void page_fault(struct regs *regs)
         printf("\nUser process tried to write a page and caused a protection fault.");
     printf("\n");
 
-    PANIC("Page fault");
+    PANIC("page fault");
 }
 
 /// @brief Allocate a frame to a page
