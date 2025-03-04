@@ -20,6 +20,7 @@ It is currently developed for x86 systems (specifically i686-elf target), but in
 - Paging
 - Kernel heap
 - Multitasking
+- Initial RAM disk (initrd)
 - Keyboard driver
 - Serial driver
 
