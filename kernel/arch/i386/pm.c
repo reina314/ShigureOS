@@ -82,20 +82,20 @@ void pm_initialize(uint32_t initrd_start)
     // Calculate the amount of memory usable for heap alloc after kernel
     pm_usable = pm_end - pm_start;
 
-    printf("\nKernel start addr : %x", (uint32_t)stext);
-    printf("\nKernel end addr   : %x", (uint32_t)ekernel);
-    printf("\nKernel size       : %x\n", (uint32_t)(ekernel - stext));
+    // printf("\nKernel start addr : %x", (uint32_t)stext);
+    // printf("\nKernel end addr   : %x", (uint32_t)ekernel);
+    // printf("\nKernel size       : %x\n", (uint32_t)(ekernel - stext));
 
-    printf("\nMemory start      : %x", (uint32_t)pm_start_temp);
-    printf("\nMemory end        : %x", (uint32_t)pm_end);
-    printf("\nMemory amount     : %x\n", pm_amount);
+    // printf("\nMemory start      : %x", (uint32_t)pm_start_temp);
+    // printf("\nMemory end        : %x", (uint32_t)pm_end);
+    // printf("\nMemory amount     : %x\n", pm_amount);
 
-    printf("\nInitrd start      : %x", initrd_start);
-    printf("\nInitrd end        : %x", initrd_end);
-    printf("\nInitrd size       : %x\n", initrd_size);
+    // printf("\nInitrd start      : %x", initrd_start);
+    // printf("\nInitrd end        : %x", initrd_end);
+    // printf("\nInitrd size       : %x\n", initrd_size);
 
-    printf("\nUsable mem start  : %x", (uint32_t)pm_start);
-    printf("\nUsable mem amount : %x\n", pm_usable);
+    // printf("\nUsable mem start  : %x", (uint32_t)pm_start);
+    // printf("\nUsable mem amount : %x\n", pm_usable);
 
     placement_address = (uint32_t)pm_start;
 }
