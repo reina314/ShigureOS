@@ -126,13 +126,23 @@ void terminal_writestring(const char *data)
 
 void terminal_showlogo(void)
 {
+	terminal_setcolor(VGA_COLOR_RED);
 	terminal_writestring("MP\"\"\"\"\"\"`MMdP      oo                          \n");
+	terminal_setcolor(VGA_COLOR_BROWN);
 	terminal_writestring("M  mmmmm..M88                                        \n");
+	terminal_setcolor(VGA_COLOR_LIGHT_BROWN);
 	terminal_writestring("M.      `YM88d888b.dP.d8888b.dP    dP88d888b..d8888b.\n");
+	terminal_setcolor(VGA_COLOR_GREEN);
 	terminal_writestring("MMMMMMM.  M88'  `888888'  `8888    8888'  `8888ooood8\n");
+	terminal_setcolor(VGA_COLOR_CYAN);
 	terminal_writestring("M. .MMM'  M88    888888.  .8888.  .8888      88.  ...\n");
+	terminal_setcolor(VGA_COLOR_BLUE);
 	terminal_writestring("Mb.     .dMdP    dPdP`8888P88`88888P'dP      `88888P'\n");
+	terminal_setcolor(VGA_COLOR_MAGENTA);
 	terminal_writestring("MMMMMMMMMMM               .88                        \n");
+	terminal_setcolor(VGA_COLOR_LIGHT_MAGENTA);
 	terminal_writestring("                      d8888P                         \n");
+
+	terminal_setcolor(VGA_COLOR_LIGHT_GREY);
 	terminal_writestring("Welcome to Shigure OS!\n");
 }
