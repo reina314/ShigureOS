@@ -120,11 +120,11 @@ void move_stack(void *new_stack_start, size_t size)
     uint32_t new_stack_ptr = old_stack_ptr + offset;
     uint32_t new_base_ptr = old_base_ptr + offset;
 
-    printf("\nold_stack_pointer : %x", old_stack_ptr);
-    printf("\nold_base_pointer  : %x", old_base_ptr);
-    printf("\noffset            : %x", offset);
-    printf("\nnew_stack_pointer : %x", new_stack_ptr);
-    printf("\nnew_base_pointer  : %x\n", new_base_ptr);
+    // printf("\nold_stack_pointer : %x", old_stack_ptr);
+    // printf("\nold_base_pointer  : %x", old_base_ptr);
+    // printf("\noffset            : %x", offset);
+    // printf("\nnew_stack_pointer : %x", new_stack_ptr);
+    // printf("\nnew_base_pointer  : %x\n", new_base_ptr);
 
     // Copy the old stack to the new location
     memcpy((void *)new_stack_ptr, (void *)old_stack_ptr, (size_t)(initial_esp - old_stack_ptr));
