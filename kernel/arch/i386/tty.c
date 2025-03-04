@@ -1,10 +1,11 @@
+#include <kernel/tty.h>
+#include <kernel/serial.h>
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h> // For outb()
 #include <string.h>
-
-#include <kernel/tty.h>
-#include <kernel/serial.h>
 
 #include "vga.h"
 
@@ -33,7 +34,26 @@ void terminal_initialize(void)
 			terminal_buffer[index] = vga_entry(' ', terminal_color);
 		}
 	}
-	terminal_showlogo();
+
+	terminal_movecursor();
+}
+
+/// @brief Move cursor to correct position
+/// @param
+void terminal_movecursor(void)
+{
+	unsigned temp = terminal_x + terminal_y * VGA_WIDTH;
+
+	// Send a command to index 14, 15 in CRT control register of VGA controller
+	outb(0x3D4, 14);
+	outb(0x3D5, (uint8_t)(temp >> 8));
+	outb(0x3D4, 15);
+	outb(0x3D5, (uint8_t)temp);
+}
+
+void terminal_clearscreen(void)
+{
+	terminal_initialize();
 }
 
 void terminal_setcolor(uint8_t color)
@@ -72,6 +92,12 @@ void terminal_scroll(int line)
 		terminal_buffer[index - VGA_WIDTH] = terminal_buffer[index];
 }
 
+/// @brief Insert a new line; a wrapper for terminal_putchar('/n')
+void terminal_newline(void)
+{
+	terminal_putchar('\n');
+}
+
 /// @brief Display given character on terminal
 /// @param c
 void terminal_putchar(char c)
@@ -85,12 +111,14 @@ void terminal_putchar(char c)
 		terminal_y++;
 		break;
 
+	case '\0':
+		break;
+
 	default:
 		terminal_putentryat(uc, terminal_color, terminal_x, terminal_y);
 		terminal_x++;
 		break;
 	}
-	serial_write(SERIAL_COM1_BASE, c);
 
 	if (terminal_x == VGA_WIDTH)
 	{
@@ -106,6 +134,9 @@ void terminal_putchar(char c)
 		terminal_x = 0;
 		terminal_y = VGA_HEIGHT - 1;
 	}
+
+	terminal_movecursor();
+	serial_write(SERIAL_COM1_BASE, c);
 }
 
 /// @brief Display given string on terminal
@@ -124,6 +155,31 @@ void terminal_writestring(const char *data)
 	terminal_write(data, strlen(data));
 }
 
+/// @brief Set current location back dx spaces
+/// @param dx Delta
+void terminal_back(int dx)
+{
+	// Move to prev row if necessary
+	if ((int)terminal_x - dx < 0)
+	{
+		terminal_y--;
+		terminal_x = VGA_WIDTH - (dx - terminal_x);
+	}
+	else
+		terminal_x -= dx;
+}
+
+/// @brief Delete a previous char and set back 1 space
+/// @param
+void terminal_backspace(void)
+{
+	terminal_back(1);
+	terminal_putchar(' ');
+	terminal_back(1);
+	terminal_movecursor();
+}
+
+/// @brief Display aesthetic ASCII logo of ShigureOS
 void terminal_showlogo(void)
 {
 	terminal_setcolor(VGA_COLOR_RED);
