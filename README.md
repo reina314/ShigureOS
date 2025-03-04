@@ -21,6 +21,7 @@ It is currently developed for x86 systems (specifically i686-elf target), but in
 - Kernel heap
 - Multitasking
 - Initial RAM disk (initrd)
+- Shell
 - Keyboard driver
 - Serial driver
 
