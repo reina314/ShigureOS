@@ -12,12 +12,17 @@
 #include <kernel/pm.h>
 #include <kernel/vm.h>
 #include <kernel/proc.h>
+#include <kernel/fs.h>
+#include <kernel/initrd.h>
 
 #include <stdio.h>
 #include <stdint.h>
 
 // for debug
 // #define CHECK_FLAG(flags, bit) ((flags) & (1 << (bit)))
+
+extern fs_node_t *fs_root;		// Defined in fs.c
+extern fs_node_t *version_node; // Defined in initrd.c
 
 multiboot_info_t *mbt; // Used in mm.c
 uint32_t initrd_location;
@@ -55,12 +60,26 @@ int kernel_main(multiboot_info_t *mbtt, unsigned int magic, unsigned int initial
 	vm_initialize();
 	proc_initialize();
 
+	// Initialize initrd and set it as filesystem root
+	fs_root = initrd_initialize(initrd_location);
+
+	// For initrd testing
+	char *buffer = (char *)kmalloc(sizeof(char) * 64);
+	// Read a file under root dir
+	read_fs(version_node, 0, version_node->length, (uint8_t *)buffer);
+	printf("\nVersion %s\n", buffer);
+	// Read a file under non-root dir
+	fs_node_t *test = finddir_fs(fs_root, "test/test.txt");
+	read_fs(test, 0, test->length, (uint8_t *)buffer);
+	printf("%s", buffer);
+	kfree(buffer);
+
 	// Refer to https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Example-boot-loader-code about multiboot info
 
-	printf("\nMultiboot magic   : %x\n", magic);
-	printf("Multiboot mods    : %d\n", mbt->mods_count); // Must be after terminal_init
-	printf("Initial stack     : %x\n", initial_esp);
-	printf("Initrd start      : %x\n", (unsigned int)initrd_location); // Currently broken! Fix this!
+	// printf("\nMultiboot magic   : %x\n", magic);
+	// printf("Multiboot mods    : %d\n", mbt->mods_count); // Must be after terminal_init
+	// printf("Initial stack     : %x\n", initial_esp);
+	// printf("Initrd start      : %x\n", (unsigned int)initrd_location); // Currently broken! Fix this!
 
 	printf("\n===== OS successfully booted! =====\n");
 

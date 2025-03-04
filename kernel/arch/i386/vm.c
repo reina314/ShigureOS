@@ -9,6 +9,7 @@
 #include "regs.h"
 
 extern uint32_t placement_address;
+extern uint32_t initrd_end;
 
 // Extract starting PFN from PTE (page)
 #define PTE_TO_PFN(pte) (pte >> 12)
@@ -53,7 +54,7 @@ void vm_initialize(void)
     frame_initialize(); // Initialize frame allocator first; defined in pm.c
 
     // Initialize kernel_pd
-    kernel_pd = (page_directory_t *)kmalloc(sizeof(page_directory_t), true, 0);
+    kernel_pd = (page_directory_t *)ikmalloc(sizeof(page_directory_t), true, 0);
     memset(kernel_pd, 0, sizeof(page_directory_t));
     for (int index = 0; index < PD_ENTRIES; index++)
         kernel_pd->entries[index] = (uint32_t)TABLE_RW;
@@ -65,12 +66,12 @@ void vm_initialize(void)
     // Not allocating the actual memory here because kernel needs identical mapping below
     for (vaddr = KHEAP_START; vaddr < KHEAP_START + KHEAP_INITIAL_SIZE; vaddr += PAGE_SIZE)
     {
-        if (vaddr == KHEAP_START)
-        {
-            pte_t *test_entry = get_page(vaddr, kernel_pd, true);
-            printf("\nFirst page entry  : %x", *test_entry);
-            printf("\nFirst page addr   : %x\n", test_entry);
-        }
+        // if (vaddr == KHEAP_START)
+        // {
+        //     pte_t *test_entry = get_page(vaddr, kernel_pd, true);
+        //     printf("\nFirst page entry  : %x", *test_entry);
+        //     printf("\nFirst page addr   : %x\n", test_entry);
+        // }
         get_page(vaddr, kernel_pd, true);
     }
 
@@ -83,6 +84,14 @@ void vm_initialize(void)
         alloc_frame(get_page(vaddr, kernel_pd, true), false, false);
         vaddr += PAGE_SIZE;
     }
+
+    // Map the initrd identically (it's temp workaround and terrible idea actually)
+    while (vaddr < initrd_end + PAGE_SIZE)
+    {
+        alloc_frame(get_page(vaddr, kernel_pd, true), false, false);
+        vaddr += PAGE_SIZE;
+    }
+    placement_address = initrd_end + PAGE_SIZE;
 
     // Map kheap pages to frames
     for (vaddr = KHEAP_START; vaddr < KHEAP_START + KHEAP_INITIAL_SIZE; vaddr += PAGE_SIZE)
@@ -115,7 +124,7 @@ void vm_initialize(void)
 /// @return The pointer to heap_t
 heap_t *heap_init(uint32_t start_addr, uint32_t end_addr, uint32_t max_size, bool supervisor, bool readonly)
 {
-    heap_t *heap = (heap_t *)kmalloc(sizeof(heap_t), false, 0);
+    heap_t *heap = (heap_t *)kmalloc(sizeof(heap_t));
     if (!heap)
         return NULL; // Handle allocation failure
 
@@ -146,7 +155,7 @@ static uint32_t expand_heap(heap_t *heap, size_t size)
     if (new_end_addr > heap->start_addr + heap->max_size)
         return 0; // Beyond heap's max end address
 
-    // Make sure that kmalloc increases placement_address each time by using while loop
+    // Make sure that ikmalloc increases placement_address each time by using while loop
     uint32_t temp_end_addr = heap->end_addr;
     while (temp_end_addr < new_end_addr)
     {
@@ -180,7 +189,7 @@ static uint32_t reduce_heap(heap_t *heap, size_t size)
     if (new_end_addr > heap->start_addr + heap->max_size)
         return 0; // Beyond heap's max end address
 
-    // Make sure that kmalloc increases placement_address each time by using while loop
+    // Make sure that ikmalloc increases placement_address each time by using while loop
     uint32_t temp_end_addr = heap->end_addr - PAGE_SIZE;
     while (new_end_addr < temp_end_addr)
     {
@@ -337,7 +346,7 @@ void heap_free(heap_t *heap, uint32_t base, size_t size)
 /// @param page_align Should allocated memory be page-aligned or not
 /// @param heap Heap to allocate memory from
 /// @return The starting virtual address of allocated memory
-void *malloc(uint32_t size, bool page_align, heap_t *heap)
+void *imalloc(uint32_t size, bool page_align, heap_t *heap)
 {
     return (void *)heap_alloc(heap, page_align, size);
 }
@@ -347,11 +356,11 @@ void *malloc(uint32_t size, bool page_align, heap_t *heap)
 /// @param page_align Should the allocated memory be page-aligned or not
 /// @param paddr Physical address; 0 to ignore
 /// @return Starting virtual address of kernel heap
-uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr)
+uint32_t ikmalloc(uint32_t size, bool page_align, uint32_t *paddr)
 {
     if (kheap != 0)
     {
-        void *vaddr = malloc(size, page_align, kheap);
+        void *vaddr = imalloc(size, page_align, kheap);
         if (paddr != 0)
         {
             pte_t *page = get_page((uint32_t)vaddr, kernel_pd, false);
@@ -375,10 +384,18 @@ uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr)
     }
 }
 
+/// @brief Allocate memory on kernel heap; a wrapper for ikmalloc
+/// @param size In bytes
+/// @return Starting address of allocated memory
+void *kmalloc(size_t size)
+{
+    return (void *)ikmalloc((uint32_t)size, false, 0);
+}
+
 /// @brief Free memory previously allocated on a heap area; a wrapper for heap_free
 /// @param heap The pointer to heap to free memory from
 /// @param ptr The pointer to the memory base
-void free(heap_t *heap, void *ptr)
+void ifree(heap_t *heap, void *ptr)
 {
     if (!heap || !ptr) // NULL pointer or Zero size!
         return;
@@ -401,7 +418,7 @@ void free(heap_t *heap, void *ptr)
 /// @param size Size of contiguous memory to free
 void kfree(void *ptr)
 {
-    return free(kheap, ptr);
+    return ifree(kheap, ptr);
 }
 
 /// @brief Switch page directory
@@ -427,7 +444,7 @@ extern void copy_physical_page(uint32_t, uint32_t);
 page_table_t *clone_page_table(page_table_t *src_pt, uint32_t *paddr)
 {
     // Create a new page-aligned page table
-    page_table_t *dest_pt = (page_table_t *)kmalloc(sizeof(page_table_t), true, paddr);
+    page_table_t *dest_pt = (page_table_t *)ikmalloc(sizeof(page_table_t), true, paddr);
     memset(dest_pt, 0, sizeof(page_table_t));
 
     // Copy info for every entry in the table
@@ -469,7 +486,7 @@ page_directory_t *clone_page_directory(page_directory_t *src_pd)
     uint32_t paddr;
 
     // Make a new page directory and obtain its physical address
-    page_directory_t *dest_pd = (page_directory_t *)kmalloc(sizeof(page_directory_t), true, &paddr);
+    page_directory_t *dest_pd = (page_directory_t *)ikmalloc(sizeof(page_directory_t), true, &paddr);
     memset(dest_pd, 0, sizeof(page_directory_t));
 
     // Get the physical address of the PDE
@@ -507,7 +524,7 @@ page_directory_t *clone_page_directory(page_directory_t *src_pd)
     return dest_pd;
 }
 
-/// @brief Get a page from a page directory
+/// @brief Get a page from a virtual address
 /// @param vaddr Virtual address of a page to retrieve
 /// @param pd Page directory to retrieve a page from
 /// @param create Whether to create a new page if not exist
@@ -526,7 +543,7 @@ pte_t *get_page(uint32_t vaddr, page_directory_t *pd, bool create)
 
         // Allocate a new page table
         uint32_t paddr;
-        page_table_t *new_table = (page_table_t *)kmalloc(sizeof(page_table_t), true, &paddr);
+        page_table_t *new_table = (page_table_t *)ikmalloc(sizeof(page_table_t), true, &paddr);
         if (!new_table)
             return NULL; // Memory allocation failed
 
@@ -549,13 +566,9 @@ pte_t *get_page(uint32_t vaddr, page_directory_t *pd, bool create)
 /// @param regs
 void page_fault(struct regs *regs)
 {
-    printf("invoked!\n");
-
     // Faulting address is stored in CR2 register
     uint32_t faulting_address;
     asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
-
-    printf("oops!\n");
 
     // Analyze the error code
     bool present = !(regs->err_code & PAGE_PRESENT); // Page not present
@@ -590,7 +603,7 @@ void page_fault(struct regs *regs)
         printf("\nUser process tried to write a page and caused a protection fault.");
     printf("\n");
 
-    PANIC("Page fault");
+    PANIC("page fault");
 }
 
 /// @brief Allocate a frame to a page
@@ -634,7 +647,7 @@ void free_frame(pte_t *page)
 static avl_node_t *create_node(uint32_t base, size_t size)
 {
     // avl_node_t *node;
-    avl_node_t *node = (avl_node_t *)kmalloc(sizeof(avl_node_t), false, 0); // DEFINE malloc!!!!!
+    avl_node_t *node = (avl_node_t *)kmalloc(sizeof(avl_node_t));
     node->base = base;
     node->size = size;
     node->height = 1;

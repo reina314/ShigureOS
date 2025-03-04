@@ -88,9 +88,10 @@ typedef struct heap
 
 void vm_initialize(void);
 heap_t *heap_init(uint32_t start_addr, uint32_t end_addr, uint32_t max_size, bool supervisor, bool readonly);
-void *malloc(uint32_t size, bool page_align, heap_t *heap);
-uint32_t kmalloc(uint32_t size, bool page_align, uint32_t *paddr);
-void free(heap_t *heap, void *ptr);
+void *imalloc(uint32_t size, bool page_align, heap_t *heap);
+uint32_t ikmalloc(uint32_t size, bool page_align, uint32_t *paddr);
+void *kmalloc(size_t size);
+void ifree(heap_t *heap, void *ptr);
 void kfree(void *ptr);
 void switch_page_directory(page_directory_t *pd);
 page_table_t *clone_page_table(page_table_t *src_pt, uint32_t *paddr);
